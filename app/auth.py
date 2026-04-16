@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import Header, HTTPException
 
-from .storage import get_conn
+from .storage import get_conn, id_column_sql
 
 SESSION_TTL_DAYS = 30
 PASSWORD_SCHEME = "pbkdf2_sha256"
@@ -19,9 +19,9 @@ SALT_BYTES = 16
 def ensure_auth_tables() -> None:
     with get_conn() as conn:
         conn.executescript(
-            """
+            f"""
             CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {id_column_sql()},
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL
