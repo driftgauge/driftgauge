@@ -39,15 +39,15 @@
     </section>
 
     <section class="card">
-      <h2>Auth</h2>
+      <h2>Login</h2>
       {% if single_user_enabled %}
       <p class="subtle">Single-user mode is enabled for {{ single_user_display_name }}.</p>
       {% endif %}
-      {% if not single_user_enabled or not single_user_registered %}
+      {% if single_user_enabled and not single_user_registered %}
       <form id="register-form">
         <label>Username<input name="username" value="{{ default_username }}" {% if single_user_enabled %}readonly{% endif %} required></label>
-        <label>Password<input name="password" type="password" placeholder="Create a password" required></label>
-        <button type="submit">Register</button>
+        <label>Password<input name="password" type="password" placeholder="Create initial password" required></label>
+        <button type="submit">Create login</button>
       </form>
       {% endif %}
       <form id="login-form">
@@ -58,6 +58,7 @@
       <pre id="auth-result"></pre>
     </section>
 
+    <div id="private-shell" class="hidden">
     <section class="card">
       <h2>Add entry</h2>
       <form id="entry-form">
@@ -167,6 +168,7 @@
       <button id="refresh-entries">Refresh</button>
       <ul id="entries-list" class="entries"></ul>
     </section>
+    </div>
   </main>
   <script src="/static/app.js"></script>
 </body>

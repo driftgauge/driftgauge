@@ -4,6 +4,7 @@ let authToken = localStorage.getItem(AUTH_TOKEN_KEY) || '';
 function storeAuthToken(token) {
   authToken = token;
   localStorage.setItem(AUTH_TOKEN_KEY, token);
+  setPrivateVisibility(Boolean(token));
 }
 
 function currentEntriesUserId() {
@@ -12,6 +13,12 @@ function currentEntriesUserId() {
 
 function currentSourcesUserId() {
   return document.querySelector('#source-form input[name="user_id"]')?.value || 'demo-user';
+}
+
+function setPrivateVisibility(isLoggedIn) {
+  const shell = document.getElementById('private-shell');
+  if (!shell) return;
+  shell.classList.toggle('hidden', !isLoggedIn);
 }
 
 function renderPublicPlaceholder(label, summary, explanation) {
@@ -335,6 +342,7 @@ document.getElementById('run-ingestion-now').addEventListener('click', async () 
 document.getElementById('refresh-sources').addEventListener('click', refreshSources);
 document.getElementById('refresh-entries').addEventListener('click', refreshEntries);
 
+setPrivateVisibility(Boolean(authToken));
 refreshEntries();
 refreshSources();
 refreshPublicSummary();
