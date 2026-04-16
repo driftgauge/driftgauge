@@ -13,9 +13,9 @@ from xml.etree import ElementTree
 import httpx
 from bs4 import BeautifulSoup
 
+from .config import ingestion_interval_minutes
 from .storage import get_conn, id_column_sql, insert_entry
 
-DEFAULT_INGEST_INTERVAL_MINUTES = 30
 DEFAULT_USER_AGENT = os.getenv("DRIFTGAUGE_USER_AGENT") or "DriftgaugeBot/0.1 (+https://driftgauge.com)"
 
 
@@ -175,7 +175,7 @@ def _source_is_due(source: dict[str, Any], min_interval_minutes: int) -> bool:
 async def ingest_sources_once(user_id: str | None = None, respect_min_interval: bool = False) -> IngestResult:
     sources = [source for source in list_sources(user_id) if source["enabled"]]
     if respect_min_interval:
-        sources = [source for source in sources if _source_is_due(source, DEFAULT_INGEST_INTERVAL_MINUTES)]
+        sources = [source for source in sources if _source_is_due(source, ingestion_interval_minutes())]
     fetched = 0
     imported = 0
     errors: list[str] = []
@@ -226,6 +226,6 @@ async def background_ingestion_loop(stop_event: asyncio.Event) -> None:
         except Exception:
             pass
         try:
-            await asyncio.wait_for(stop_event.wait(), timeout=DEFAULT_INGEST_INTERVAL_MINUTES * 60)
+            await asyncio.wait_for(stop_event.wait(), timeout=ingestion_interval_minutes() * 60)
         except asyncio.TimeoutError:
             continue

@@ -13,13 +13,18 @@
 
     <section class="card">
       <h2>Auth</h2>
+      {% if single_user_enabled %}
+      <p class="subtle">Single-user mode is enabled for {{ single_user_display_name }}.</p>
+      {% endif %}
+      {% if not single_user_enabled or not single_user_registered %}
       <form id="register-form">
-        <label>Username<input name="username" value="demo" required></label>
+        <label>Username<input name="username" value="{{ default_username }}" {% if single_user_enabled %}readonly{% endif %} required></label>
         <label>Password<input name="password" type="password" placeholder="Create a password" required></label>
         <button type="submit">Register</button>
       </form>
+      {% endif %}
       <form id="login-form">
-        <label>Username<input name="username" value="demo" required></label>
+        <label>Username<input name="username" value="{{ default_username }}" {% if single_user_enabled %}readonly{% endif %} required></label>
         <label>Password<input name="password" type="password" placeholder="Enter your password" required></label>
         <button type="submit">Login</button>
       </form>
@@ -29,7 +34,7 @@
     <section class="card">
       <h2>Add entry</h2>
       <form id="entry-form">
-        <label>User ID<input name="user_id" value="demo-user" required></label>
+        <label>User ID<input name="user_id" value="{{ default_user_id }}" {% if single_user_enabled %}readonly{% endif %} required></label>
         <label>Source<input name="source" value="journal" required></label>
         <label>Text<textarea name="text" rows="6" required></textarea></label>
         <button type="submit">Save entry</button>
@@ -40,7 +45,7 @@
     <section class="card">
       <h2>Analyze latest entries</h2>
       <form id="analyze-form">
-        <label>User ID<input name="user_id" value="demo-user" required></label>
+        <label>User ID<input name="user_id" value="{{ default_user_id }}" {% if single_user_enabled %}readonly{% endif %} required></label>
         <label>Window size<input name="window_size" type="number" value="4" min="3" max="50" required></label>
         <button type="submit">Run analysis</button>
       </form>
@@ -57,7 +62,7 @@
       <h2>Import opted-in files</h2>
       {% if local_file_imports_enabled %}
       <form id="import-form">
-        <label>User ID<input name="user_id" value="demo-user" required></label>
+        <label>User ID<input name="user_id" value="{{ default_user_id }}" {% if single_user_enabled %}readonly{% endif %} required></label>
         <label>Directory<input name="directory" value="data/imports/demo-user" required></label>
         <label>Source<input name="source" value="journal-import" required></label>
         <button type="submit">Import files</button>
@@ -71,7 +76,7 @@
     <section class="card">
       <h2>Privacy settings</h2>
       <form id="privacy-form">
-        <label>User ID<input name="user_id" value="demo-user" required></label>
+        <label>User ID<input name="user_id" value="{{ default_user_id }}" {% if single_user_enabled %}readonly{% endif %} required></label>
         <label>Retention days<input name="retention_days" type="number" value="30" min="1" max="3650" required></label>
         <label class="checkbox-row"><input name="allow_file_imports" type="checkbox" checked> Allow file imports</label>
         <button type="submit">Save privacy settings</button>
@@ -82,8 +87,8 @@
     <section class="card">
       <h2>Scheduled analysis</h2>
       <form id="schedule-form">
-        <label>User ID<input name="user_id" value="demo-user" required></label>
-        <label>Interval minutes<input name="interval_minutes" type="number" value="30" min="5" max="10080" required></label>
+        <label>User ID<input name="user_id" value="{{ default_user_id }}" {% if single_user_enabled %}readonly{% endif %} required></label>
+        <label>Interval minutes<input name="interval_minutes" type="number" value="{{ default_schedule_interval }}" min="5" max="10080" required></label>
         <label class="checkbox-row"><input name="enabled" type="checkbox" checked> Enable scheduled analysis</label>
         <button type="submit">Save schedule</button>
       </form>
@@ -94,7 +99,7 @@
     <section class="card">
       <h2>Private alerts</h2>
       <form id="alert-settings-form">
-        <label>User ID<input name="user_id" value="demo-user" required></label>
+        <label>User ID<input name="user_id" value="{{ default_user_id }}" {% if single_user_enabled %}readonly{% endif %} required></label>
         <label>Email<input name="email_to" type="email" placeholder="alerts@example.com"></label>
         <label class="checkbox-row"><input name="email_enabled" type="checkbox"> Enable private email alerts</label>
         <button type="submit">Save alert settings</button>
@@ -105,7 +110,7 @@
     <section class="card">
       <h2>Source ingestion</h2>
       <form id="source-form">
-        <label>User ID<input name="user_id" value="demo-user" required></label>
+        <label>User ID<input name="user_id" value="{{ default_user_id }}" {% if single_user_enabled %}readonly{% endif %} required></label>
         <label>Source key<input name="source_key" value="demo-site" required></label>
         <label>Label<input name="label" value="Example Blog" required></label>
         <label>URL<input name="url" type="url" value="https://example.com" required></label>
@@ -113,6 +118,12 @@
           <select name="kind">
             <option value="site">Website</option>
             <option value="rss">RSS feed</option>
+            <option value="instagram">Instagram</option>
+            <option value="facebook">Facebook</option>
+            <option value="x">X / Twitter</option>
+            <option value="threads">Threads</option>
+            <option value="tiktok">TikTok</option>
+            <option value="snapchat">Snapchat</option>
           </select>
         </label>
         <label class="checkbox-row"><input name="enabled" type="checkbox" checked> Enable source</label>

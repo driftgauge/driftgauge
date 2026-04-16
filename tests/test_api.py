@@ -89,3 +89,45 @@ def test_vercel_defaults_sqlite_to_tmp(monkeypatch) -> None:
 
     resolved = storage._resolve_db_path()
     assert resolved == Path("/tmp/driftgauge.db")
+
+
+
+def test_single_user_mode_restricts_auth_and_coerces_user_id(monkeypatch) -> None:
+    monkeypatch.setenv("DRIFTGAUGE_SINGLE_USER_ENABLED", "1")
+    monkeypatch.setenv("DRIFTGAUGE_SINGLE_USER_DISPLAY_NAME", "Nate Houk")
+    monkeypatch.setenv("DRIFTGAUGE_SINGLE_USER_USERNAME", "nate_houk_single")
+    monkeypatch.setenv("DRIFTGAUGE_SINGLE_USER_ID", "nate-houk")
+
+    wrong_reg = client.post('/auth/register', json={'username': 'someone_else', 'password': 'password123'})
+    assert wrong_reg.status_code == 403
+
+    reg = client.post('/auth/register', json={'username': 'nate_houk_single', 'password': 'password123'})
+    assert reg.status_code == 200
+    token = reg.json()['token']
+
+    created = client.post(
+        '/entries',
+        headers={'X-Auth-Token': token},
+        json={'user_id': 'not-nate', 'source': 'journal', 'text': 'Single-user entry'},
+    )
+    assert created.status_code == 200
+    assert created.json()['user_id'] == 'nate-houk'
+
+    listed = client.get('/entries?user_id=another-user', headers={'X-Auth-Token': token})
+    assert listed.status_code == 200
+    assert any(entry['user_id'] == 'nate-houk' for entry in listed.json())
+
+
+
+def test_configured_social_sources(monkeypatch) -> None:
+    monkeypatch.setenv('DRIFTGAUGE_SINGLE_USER_ENABLED', '1')
+    monkeypatch.setenv('DRIFTGAUGE_SINGLE_USER_USERNAME', 'nate_social')
+    monkeypatch.setenv('DRIFTGAUGE_SINGLE_USER_ID', 'nate-houk')
+    monkeypatch.setenv('DRIFTGAUGE_SOCIAL_INSTAGRAM_URL', 'https://instagram.com/nate')
+    monkeypatch.setenv('DRIFTGAUGE_SOCIAL_X_URL', 'https://x.com/nate')
+
+    from app.config import configured_social_sources
+
+    sources = configured_social_sources()
+    assert {source['source_key'] for source in sources} == {'social-instagram', 'social-x'}
+    assert all(source['user_id'] == 'nate-houk' for source in sources)

@@ -64,21 +64,24 @@ async function refreshEntries() {
   }
 }
 
-document.getElementById('register-form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const form = new FormData(event.target);
-  const payload = Object.fromEntries(form.entries());
-  const res = await fetch('/auth/register', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+const registerForm = document.getElementById('register-form');
+if (registerForm) {
+  registerForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.target);
+    const payload = Object.fromEntries(form.entries());
+    const res = await fetch('/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json();
+    if (body.token) {
+      storeAuthToken(body.token);
+    }
+    document.getElementById('auth-result').textContent = JSON.stringify(body, null, 2);
   });
-  const body = await res.json();
-  if (body.token) {
-    storeAuthToken(body.token);
-  }
-  document.getElementById('auth-result').textContent = JSON.stringify(body, null, 2);
-});
+}
 
 document.getElementById('login-form').addEventListener('submit', async (event) => {
   event.preventDefault();

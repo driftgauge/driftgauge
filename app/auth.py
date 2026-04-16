@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import Header, HTTPException
 
+from .config import single_user_enabled, single_user_username
 from .storage import get_conn, id_column_sql
 
 SESSION_TTL_DAYS = 30
@@ -75,6 +76,12 @@ def create_user(username: str, password: str) -> dict[str, Any]:
     return {"username": username, "created_at": now}
 
 
+def user_exists(username: str) -> bool:
+    with get_conn() as conn:
+        row = conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone()
+    return row is not None
+
+
 def verify_user(username: str, password: str) -> bool:
     with get_conn() as conn:
         row = conn.execute(
@@ -130,5 +137,8 @@ def require_auth(x_auth_token: str | None = Header(default=None)) -> str:
         raise HTTPException(status_code=401, detail="Missing auth token")
     username = get_username_for_token(x_auth_token)
     if not username:
+        raise HTTPException(status_code=401, detail="Invalid or expired auth token")
+    expected_username = single_user_username()
+    if single_user_enabled() and expected_username and username != expected_username:
         raise HTTPException(status_code=401, detail="Invalid or expired auth token")
     return username
