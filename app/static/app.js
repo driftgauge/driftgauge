@@ -339,6 +339,15 @@ document.getElementById('run-ingestion-now').addEventListener('click', async () 
   await refreshPublicSummary();
 });
 
+document.getElementById('run-historical-backfill').addEventListener('click', async () => {
+  const res = await apiFetch('/ingestion/backfill?max_pages=25&max_items=250', { method: 'POST' });
+  const body = await res.json();
+  document.getElementById('ingestion-result').textContent = JSON.stringify(body, null, 2);
+  await refreshSources();
+  await refreshEntries();
+  await refreshPublicSummary();
+});
+
 document.getElementById('refresh-sources').addEventListener('click', refreshSources);
 document.getElementById('refresh-entries').addEventListener('click', refreshEntries);
 
