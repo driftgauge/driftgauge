@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
 
 import asyncio
 import secrets
@@ -43,6 +43,8 @@ STATE_SUMMARIES = {
     "moderate": "Several signals are elevated and worth a closer look.",
     "high": "Multiple signals are sharply elevated right now.",
 }
+
+PUBLIC_SUMMARY_TEXT = "Neutral public activity metrics from connected sources. Private inference stays behind authentication."
 
 
 def resolve_user_id(requested_user_id: str | None = None) -> str:
@@ -158,6 +160,77 @@ def build_dashboard_summary(user_id: str) -> dict:
     }
 
 
+def build_public_summary(user_id: str) -> dict:
+    entries = list_entries(user_id=user_id, limit=200)
+    sources = list_sources(user_id=user_id)
+    enabled_sources = [source for source in sources if source["enabled"]]
+    subject_name = single_user_display_name() if single_user_enabled() else user_id
+    now = utc_now()
+
+    recent_24h = [entry for entry in entries if now - entry.created_at.astimezone(timezone.utc) <= timedelta(hours=24)]
+    recent_7d = [entry for entry in entries if now - entry.created_at.astimezone(timezone.utc) <= timedelta(days=7)]
+    late_night_ratio = 0.0
+    if recent_7d:
+        late_night_ratio = sum(1 for entry in recent_7d if entry.created_at.hour < 5 or entry.created_at.hour >= 23) / len(recent_7d)
+
+    average_daily_recent = len(recent_7d) / 7 if recent_7d else 0.0
+    activity_tempo = len(recent_24h) / max(average_daily_recent, 1.0) if entries else 0.0
+
+    checked_times: list[datetime] = []
+    healthy_sources = 0
+    for source in enabled_sources:
+        last_status = source.get("last_status") or ""
+        if str(last_status).startswith("ok"):
+            healthy_sources += 1
+        last_checked_at = source.get("last_checked_at")
+        if not last_checked_at:
+            continue
+        parsed = datetime.fromisoformat(last_checked_at)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        checked_times.append(parsed.astimezone(timezone.utc))
+
+    latest_check_at = max(checked_times) if checked_times else None
+    freshness_minutes = int((now - latest_check_at).total_seconds() // 60) if latest_check_at else None
+    active_source_labels = {entry.source for entry in recent_7d}
+    source_coverage_ratio = len(active_source_labels) / max(len(enabled_sources), 1) if enabled_sources else 0.0
+    source_counts = Counter(entry.source for entry in entries[:40])
+
+    freshness_percent = 0.0
+    if freshness_minutes is not None:
+        freshness_percent = max(0.0, min(100.0, 100.0 - (freshness_minutes / 180.0) * 100.0))
+
+    return {
+        "status": "ready" if entries or enabled_sources else "empty",
+        "subject_name": subject_name,
+        "headline": f"{subject_name.upper()} MONITORING",
+        "summary": PUBLIC_SUMMARY_TEXT,
+        "stats": [
+            {"label": "Entries captured", "value": len(entries), "detail": "latest collected items"},
+            {"label": "Posts in 24h", "value": len(recent_24h), "detail": "activity volume over the last day"},
+            {"label": "Enabled sources", "value": len(enabled_sources), "detail": f"{healthy_sources} reporting healthy checks"},
+            {"label": "Last source check", "value": (f"{freshness_minutes}m ago" if freshness_minutes is not None else "waiting"), "detail": "freshness of ingestion status"},
+        ],
+        "gauges": [
+            {"label": "Activity tempo", "display": f"{activity_tempo:.2f}x", "percent": max(0.0, min(100.0, (activity_tempo / 2.5) * 100.0))},
+            {"label": "Late-night share", "display": f"{round(late_night_ratio * 100)}%", "percent": max(0.0, min(100.0, late_night_ratio * 100.0))},
+            {"label": "Source coverage", "display": f"{len(active_source_labels)}/{len(enabled_sources) or 0}", "percent": max(0.0, min(100.0, source_coverage_ratio * 100.0))},
+            {"label": "Ingestion freshness", "display": (f"{freshness_minutes}m" if freshness_minutes is not None else "n/a"), "percent": freshness_percent},
+        ],
+        "source_breakdown": [
+            {"label": source, "count": count} for source, count in source_counts.most_common(6)
+        ],
+        "recent_activity": [
+            {
+                "source": entry.source,
+                "created_at": entry.created_at.isoformat(),
+                "word_count": len(entry.text.split()),
+            }
+            for entry in entries[:6]
+        ],
+    }
+
+
 def ensure_single_user_defaults() -> None:
     if not single_user_enabled():
         return
@@ -226,6 +299,11 @@ def index(request: Request):
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+@app.get("/public/summary")
+def public_summary(user_id: str | None = None):
+    return build_public_summary(resolve_user_id(user_id))
 
 
 @app.get("/dashboard/summary")

@@ -172,3 +172,28 @@ def test_configured_social_sources_from_handles(monkeypatch) -> None:
     assert 'social-instagram-natehouk' in {source['source_key'] for source in sources}
     assert 'social-x-epsilonrecords' in {source['source_key'] for source in sources}
     assert len(sources) == 12
+
+
+
+def test_public_summary_exposes_only_neutral_metrics() -> None:
+    headers = _auth_headers(username='public_summary_tester')
+    payloads = [
+        {'user_id': 'public-user', 'source': 'x', 'text': 'Normal day, a couple of posts and then offline.', 'created_at': '2026-03-12T20:00:00Z'},
+        {'user_id': 'public-user', 'source': 'threads', 'text': 'Another steady update, nothing unusual here.', 'created_at': '2026-03-13T20:00:00Z'},
+        {'user_id': 'public-user', 'source': 'instagram', 'text': 'I need to post this right now because everything is lining up tonight!!!', 'created_at': '2026-03-17T01:00:00Z'},
+    ]
+    for payload in payloads:
+        res = client.post('/entries', headers=headers, json=payload)
+        assert res.status_code == 200
+
+    public_summary = client.get('/public/summary?user_id=public-user')
+    assert public_summary.status_code == 200
+    body = public_summary.json()
+    assert body['headline'].endswith('MONITORING')
+    assert body['stats']
+    assert body['gauges']
+    assert body['source_breakdown']
+    assert body['recent_activity']
+    assert 'risk_score' not in body
+    assert all('word_count' in item for item in body['recent_activity'])
+    assert all('preview' not in item for item in body['recent_activity'])

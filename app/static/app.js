@@ -14,11 +14,11 @@ function currentSourcesUserId() {
   return document.querySelector('#source-form input[name="user_id"]')?.value || 'demo-user';
 }
 
-function renderDashboardPlaceholder(label, summary, explanation) {
+function renderPublicPlaceholder(label, summary, explanation) {
   document.getElementById('state-label').textContent = label;
   document.getElementById('state-summary').textContent = summary;
   document.getElementById('state-explanation').textContent = explanation;
-  document.getElementById('state-score').textContent = '--';
+  document.getElementById('public-stats').innerHTML = '';
   document.getElementById('evidence-gauges').innerHTML = '';
   document.getElementById('source-breakdown').innerHTML = '';
   document.getElementById('recent-evidence').innerHTML = '';
@@ -49,53 +49,63 @@ function renderSourceBar(item, maxCount) {
   `;
 }
 
-async function refreshDashboard() {
-  if (!authToken) {
-    renderDashboardPlaceholder('LOGIN TO LOAD', 'Authenticate to load the current mood and signal dashboard.', 'This view updates from the latest analyzed writing and ingestion signals.');
-    return;
-  }
+function renderStatCard(item) {
+  return `
+    <div class="stat-card">
+      <span>${item.label}</span>
+      <strong>${item.value}</strong>
+      <small>${item.detail}</small>
+    </div>
+  `;
+}
 
+async function refreshPublicSummary() {
   const userId = currentEntriesUserId();
-  const res = await apiFetch(`/dashboard/summary?user_id=${encodeURIComponent(userId)}`);
+  const res = await fetch(`/public/summary?user_id=${encodeURIComponent(userId)}`);
   const body = await res.json();
   if (!res.ok) {
-    renderDashboardPlaceholder('UNAVAILABLE', 'Dashboard data could not be loaded.', body.detail || 'Try logging in again.');
+    renderPublicPlaceholder('MONITORING UNAVAILABLE', 'Public monitoring metrics could not be loaded.', body.detail || 'Configure a monitored account first.');
     return;
   }
 
   document.getElementById('state-subject').textContent = body.subject_name;
   document.getElementById('state-label').textContent = body.headline;
   document.getElementById('state-summary').textContent = body.summary;
-  document.getElementById('state-explanation').textContent = body.explanation;
-  document.getElementById('state-score').textContent = body.risk_score ?? '--';
+  document.getElementById('state-explanation').textContent = 'This page shows neutral metrics only, not inferred mood or mental-state output.';
+  document.getElementById('public-stats').innerHTML = (body.stats || []).map(renderStatCard).join('');
 
   const gauges = document.getElementById('evidence-gauges');
-  gauges.innerHTML = (body.evidence || []).map(renderGauge).join('') || '<p class="subtle">No evidence gauges yet.</p>';
+  gauges.innerHTML = (body.gauges || []).map(renderGauge).join('') || '<p class="subtle">No evaluation inputs yet.</p>';
 
   const sourceBreakdown = document.getElementById('source-breakdown');
   const sourceData = body.source_breakdown || [];
   const maxCount = sourceData.reduce((max, item) => Math.max(max, item.count), 0);
-  sourceBreakdown.innerHTML = sourceData.map((item) => renderSourceBar(item, maxCount)).join('') || '<p class="subtle">No source evidence yet.</p>';
+  sourceBreakdown.innerHTML = sourceData.map((item) => renderSourceBar(item, maxCount)).join('') || '<p class="subtle">No source activity yet.</p>';
 
   const recentEvidence = document.getElementById('recent-evidence');
   recentEvidence.innerHTML = '';
-  for (const entry of body.recent_entries || []) {
+  for (const entry of body.recent_activity || []) {
     const li = document.createElement('li');
-    li.textContent = `[${entry.created_at}] ${entry.source}: ${entry.preview}`;
+    li.textContent = `[${entry.created_at}] ${entry.source} — ${entry.word_count} words`;
     recentEvidence.appendChild(li);
   }
-  if (!(body.recent_entries || []).length) {
+  if (!(body.recent_activity || []).length) {
     const li = document.createElement('li');
-    li.textContent = 'No recent evidence yet.';
+    li.textContent = 'No recent activity yet.';
     recentEvidence.appendChild(li);
   }
 }
 
 async function refreshSources() {
+  const list = document.getElementById('sources-list');
+  if (!authToken) {
+    list.innerHTML = '<li>Log in to manage monitored sources.</li>';
+    return;
+  }
+
   const userId = currentSourcesUserId();
   const res = await apiFetch(`/ingestion/sources?user_id=${encodeURIComponent(userId)}`);
   const body = await res.json();
-  const list = document.getElementById('sources-list');
   list.innerHTML = '';
 
   if (!body.length) {
@@ -121,10 +131,15 @@ async function apiFetch(url, options = {}) {
 }
 
 async function refreshEntries() {
+  const list = document.getElementById('entries-list');
+  if (!authToken) {
+    list.innerHTML = '<li>Log in to view collected entries.</li>';
+    return;
+  }
+
   const userId = currentEntriesUserId();
   const res = await apiFetch(`/entries?user_id=${encodeURIComponent(userId)}&limit=20`);
   const entries = await res.json();
-  const list = document.getElementById('entries-list');
   list.innerHTML = '';
 
   if (!entries.length) {
@@ -155,7 +170,8 @@ if (registerForm) {
     const body = await res.json();
     if (body.token) {
       storeAuthToken(body.token);
-      await refreshDashboard();
+      await refreshEntries();
+      await refreshSources();
     }
     document.getElementById('auth-result').textContent = JSON.stringify(body, null, 2);
   });
@@ -173,7 +189,8 @@ document.getElementById('login-form').addEventListener('submit', async (event) =
   const body = await res.json();
   if (body.token) {
     storeAuthToken(body.token);
-    await refreshDashboard();
+    await refreshEntries();
+    await refreshSources();
   }
   document.getElementById('auth-result').textContent = JSON.stringify(body, null, 2);
 });
@@ -190,7 +207,7 @@ document.getElementById('entry-form').addEventListener('submit', async (event) =
   const body = await res.json();
   document.getElementById('entry-result').textContent = JSON.stringify(body, null, 2);
   await refreshEntries();
-  await refreshDashboard();
+  await refreshPublicSummary();
 });
 
 document.getElementById('analyze-form').addEventListener('submit', async (event) => {
@@ -216,7 +233,7 @@ document.getElementById('analyze-form').addEventListener('submit', async (event)
     li.textContent = item;
     ul.appendChild(li);
   }
-  await refreshDashboard();
+  await refreshPublicSummary();
 });
 
 const importForm = document.getElementById('import-form');
@@ -233,7 +250,7 @@ if (importForm) {
     const body = await res.json();
     document.getElementById('import-result').textContent = JSON.stringify(body, null, 2);
     await refreshEntries();
-    await refreshDashboard();
+    await refreshPublicSummary();
   });
 }
 
@@ -272,7 +289,7 @@ document.getElementById('run-schedule-now').addEventListener('click', async () =
   const res = await apiFetch('/schedule/run', { method: 'POST' });
   const body = await res.json();
   document.getElementById('schedule-result').textContent = JSON.stringify(body, null, 2);
-  await refreshDashboard();
+  await refreshPublicSummary();
 });
 
 document.getElementById('alert-settings-form').addEventListener('submit', async (event) => {
@@ -303,6 +320,7 @@ document.getElementById('source-form').addEventListener('submit', async (event) 
   const body = await res.json();
   document.getElementById('ingestion-result').textContent = JSON.stringify(body, null, 2);
   await refreshSources();
+  await refreshPublicSummary();
 });
 
 document.getElementById('run-ingestion-now').addEventListener('click', async () => {
@@ -311,7 +329,7 @@ document.getElementById('run-ingestion-now').addEventListener('click', async () 
   document.getElementById('ingestion-result').textContent = JSON.stringify(body, null, 2);
   await refreshSources();
   await refreshEntries();
-  await refreshDashboard();
+  await refreshPublicSummary();
 });
 
 document.getElementById('refresh-sources').addEventListener('click', refreshSources);
@@ -319,4 +337,4 @@ document.getElementById('refresh-entries').addEventListener('click', refreshEntr
 
 refreshEntries();
 refreshSources();
-refreshDashboard();
+refreshPublicSummary();

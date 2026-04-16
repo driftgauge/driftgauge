@@ -12,22 +12,19 @@
     <p class="subtle">Private baseline-deviation monitor for opted-in writing.</p>
 
     <section class="card state-card" id="state-card">
-      <p class="eyebrow">Current state</p>
-      <h2 id="state-subject">{{ single_user_display_name if single_user_enabled else 'Current user' }}</h2>
+      <p class="eyebrow">Public monitoring overview</p>
+      <h2 id="state-subject">{{ single_user_display_name if single_user_enabled else 'Current monitored account' }}</h2>
       <div class="state-row">
         <div>
-          <p class="state-label" id="state-label">LOGIN TO LOAD</p>
-          <p class="state-summary" id="state-summary">Authenticate to load the current mood and signal dashboard.</p>
-          <p class="subtle" id="state-explanation">This view updates from the latest analyzed writing and ingestion signals.</p>
-        </div>
-        <div class="score-pill">
-          <span>Risk score</span>
-          <strong id="state-score">--</strong>
+          <p class="state-label" id="state-label">MONITORING ACTIVE</p>
+          <p class="state-summary" id="state-summary">Neutral public activity metrics from connected sources.</p>
+          <p class="subtle" id="state-explanation">This page shows source freshness, posting tempo, and coverage only. Private inference stays behind authentication.</p>
         </div>
       </div>
+      <div id="public-stats" class="stats-grid"></div>
       <div class="dashboard-grid">
         <section class="dashboard-panel">
-          <h3>Evidence gauges</h3>
+          <h3>Evaluation inputs</h3>
           <div id="evidence-gauges" class="evidence-gauges"></div>
         </section>
         <section class="dashboard-panel">
@@ -36,7 +33,7 @@
         </section>
       </div>
       <section class="dashboard-panel">
-        <h3>Recent evidence</h3>
+        <h3>Recent activity</h3>
         <ul id="recent-evidence" class="entries"></ul>
       </section>
     </section>
