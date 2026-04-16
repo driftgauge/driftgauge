@@ -287,6 +287,40 @@ pre {
   margin-top: 6px;
 }
 
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid #334155;
+}
+
+.status-chip.healthy {
+  color: #86efac;
+  border-color: #166534;
+  background: rgba(22, 101, 52, 0.2);
+}
+
+.status-chip.empty {
+  color: #fcd34d;
+  border-color: #854d0e;
+  background: rgba(133, 77, 14, 0.2);
+}
+
+.status-chip.failing {
+  color: #fca5a5;
+  border-color: #991b1b;
+  background: rgba(153, 27, 27, 0.2);
+}
+
+.status-chip.paused {
+  color: #cbd5e1;
+  border-color: #475569;
+  background: rgba(71, 85, 105, 0.2);
+}
+
 .source-actions {
   display: flex;
   flex-wrap: wrap;

@@ -18,7 +18,7 @@ from .analyzer import analyze_entries
 from .auth import create_session, create_user, ensure_auth_tables, require_auth, revoke_session, user_exists, verify_user
 from .config import analysis_interval_minutes, background_loop_enabled, configured_social_sources, cron_secret, local_file_imports_enabled, normalize_text, single_user_display_name, single_user_enabled, single_user_id, single_user_username
 from .connectors.files import import_from_directory
-from .ingestion import background_ingestion_loop, delete_source, ensure_ingestion_tables, get_source, ingest_sources_once, list_sources, set_source_enabled, upsert_source
+from .ingestion import background_ingestion_loop, clear_source_data, delete_source, ensure_ingestion_tables, get_source, ingest_sources_once, list_sources, set_source_enabled, upsert_source
 from .models import AlertSettingsRequest, AnalysisRequest, Entry, EntryCreate, HealthResponse, ImportRequest, IngestionSourceRequest, LoginRequest, PrivacySettings, RegisterRequest, ScheduleSettings
 from .privacy import apply_retention, ensure_privacy_tables, get_user_settings, set_user_settings
 from .scheduler import ensure_scheduler_tables, list_jobs, run_due_jobs, upsert_job
@@ -489,6 +489,15 @@ async def run_ingestion_source(source_key: str, historical: bool = Query(False),
         source_keys=[source_key],
     )
     return {"fetched_sources": result.fetched_sources, "fetched_pages": result.fetched_pages, "imported_entries": result.imported_entries, "errors": result.errors}
+
+
+@app.post("/ingestion/sources/{source_key}/clear")
+def clear_ingestion_source(source_key: str, _: str = Depends(require_auth)):
+    scoped_user_id = single_user_id() if single_user_enabled() else None
+    cleared = clear_source_data(source_key, scoped_user_id)
+    if not cleared:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return {"ok": True, **cleared}
 
 
 @app.post("/ingestion/run")

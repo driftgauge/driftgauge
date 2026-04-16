@@ -113,6 +113,43 @@ function setIngestionResult(body) {
   document.getElementById('ingestion-result').textContent = JSON.stringify(body, null, 2);
 }
 
+function classifySourceStatus(source) {
+  if (!source.enabled) {
+    return { key: 'paused', label: 'Paused' };
+  }
+  if (!source.last_status) {
+    return { key: 'empty', label: 'Never run' };
+  }
+  if (String(source.last_status).startsWith('error:')) {
+    return { key: 'failing', label: 'Failing' };
+  }
+  if (String(source.last_status).startsWith('ok:0')) {
+    return { key: 'empty', label: 'No items yet' };
+  }
+  return { key: 'healthy', label: 'Healthy' };
+}
+
+function renderSourceSummary(sources) {
+  const summary = document.getElementById('source-summary');
+  if (!summary) return;
+  if (!sources.length) {
+    summary.innerHTML = '';
+    return;
+  }
+
+  const counts = { healthy: 0, empty: 0, failing: 0, paused: 0 };
+  for (const source of sources) {
+    counts[classifySourceStatus(source).key] += 1;
+  }
+
+  summary.innerHTML = [
+    { label: 'Healthy', value: counts.healthy, detail: 'sources returning usable items or valid checks' },
+    { label: 'Empty', value: counts.empty, detail: 'sources reachable but not yielding content yet' },
+    { label: 'Failing', value: counts.failing, detail: 'sources returning errors or blocked responses' },
+    { label: 'Paused', value: counts.paused, detail: 'sources disabled from scheduled runs' },
+  ].map(renderStatCard).join('');
+}
+
 function resetSourceForm() {
   if (!sourceForm || !defaultSourceFormValues) return;
   sourceForm.querySelector('input[name="source_key"]').value = defaultSourceFormValues.source_key;
@@ -139,6 +176,7 @@ function populateSourceForm(source) {
 function renderSourceItem(source) {
   const toggleLabel = source.enabled ? 'Pause' : 'Enable';
   const status = source.last_status || 'never run';
+  const statusInfo = classifySourceStatus(source);
   return `
     <li data-source-key="${source.source_key}">
       <div class="source-title-row">
@@ -148,11 +186,13 @@ function renderSourceItem(source) {
           <div class="source-url">${source.url}</div>
           <div class="source-status">${status}</div>
         </div>
+        <span class="status-chip ${statusInfo.key}">${statusInfo.label}</span>
       </div>
       <div class="source-actions">
         <button type="button" data-source-action="edit" data-source-key="${source.source_key}" class="secondary-button">Edit</button>
         <button type="button" data-source-action="toggle" data-source-key="${source.source_key}" class="secondary-button">${toggleLabel}</button>
         <button type="button" data-source-action="run" data-source-key="${source.source_key}">Retry now</button>
+        <button type="button" data-source-action="clear" data-source-key="${source.source_key}" class="secondary-button">Clear data</button>
         <button type="button" data-source-action="delete" data-source-key="${source.source_key}" class="secondary-button">Delete</button>
       </div>
     </li>
@@ -198,8 +238,10 @@ async function refreshPublicSummary() {
 
 async function refreshSources() {
   const list = document.getElementById('sources-list');
+  const summary = document.getElementById('source-summary');
   if (!authToken) {
     sourceIndex = new Map();
+    if (summary) summary.innerHTML = '';
     list.innerHTML = '<li>Log in to manage monitored sources.</li>';
     return;
   }
@@ -208,12 +250,14 @@ async function refreshSources() {
   const res = await apiFetch(`/ingestion/sources?user_id=${encodeURIComponent(userId)}`);
   if (!res.ok) {
     sourceIndex = new Map();
+    if (summary) summary.innerHTML = '';
     list.innerHTML = '<li>Log in to manage monitored sources.</li>';
     return;
   }
   const body = await res.json();
   sourceIndex = new Map(body.map((source) => [source.source_key, source]));
   list.innerHTML = '';
+  renderSourceSummary(body);
 
   if (!body.length) {
     const li = document.createElement('li');
@@ -250,6 +294,19 @@ async function handleSourceAction(event) {
 
   if (action === 'run') {
     const res = await apiFetch(`/ingestion/sources/${encodeURIComponent(sourceKey)}/run`, { method: 'POST' });
+    const body = await res.json();
+    setIngestionResult(body);
+    await refreshSources();
+    await refreshEntries();
+    await refreshPublicSummary();
+    return;
+  }
+
+  if (action === 'clear') {
+    if (!window.confirm(`Clear imported data for ${source.label}? This will remove saved entries for this source.`)) {
+      return;
+    }
+    const res = await apiFetch(`/ingestion/sources/${encodeURIComponent(sourceKey)}/clear`, { method: 'POST' });
     const body = await res.json();
     setIngestionResult(body);
     await refreshSources();

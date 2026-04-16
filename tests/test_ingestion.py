@@ -116,7 +116,7 @@ def test_run_single_source_endpoint(monkeypatch) -> None:
 
     headers = _auth_headers(username='source_runner')
     source_key = f'run-source-{uuid4().hex}'
-    upsert_source('demo-user', source_key, 'Runnable Source', 'https://example.com/run', 'site', True)
+    upsert_source('demo-user', source_key, 'Runnable Source', 'https://example.com/run', 'site', False)
 
     async def fake_fetch(client, url):
         assert url == 'https://example.com/run'
@@ -129,3 +129,30 @@ def test_run_single_source_endpoint(monkeypatch) -> None:
     body = res.json()
     assert body['fetched_sources'] == 1
     assert body['imported_entries'] == 1
+
+
+
+def test_clear_source_endpoint_removes_entries_and_hashes() -> None:
+    from app.storage import insert_entry, list_entries, utc_now
+    from app.ingestion import remember_item
+
+    headers = _auth_headers(username='source_cleaner')
+    source_key = f'clear-source-{uuid4().hex}'
+    label = 'Clearable Source'
+    upsert_source('demo-user', source_key, label, 'https://example.com/clear', 'site', True)
+    remember_item(source_key, f'hash-{uuid4().hex}', 'https://example.com/post', 'Test Post')
+    insert_entry('demo-user', label, 'Imported body', utc_now())
+
+    clear = client.post(f'/ingestion/sources/{source_key}/clear', headers=headers)
+    assert clear.status_code == 200
+    body = clear.json()
+    assert body['ok'] is True
+    assert body['deleted_entries'] >= 1
+    assert body['deleted_items'] >= 1
+
+    listed = client.get('/entries?user_id=demo-user', headers=headers)
+    assert all(entry['source'] != label for entry in listed.json())
+
+    sources = client.get('/ingestion/sources?user_id=demo-user', headers=headers).json()
+    source = next(item for item in sources if item['source_key'] == source_key)
+    assert source['last_status'] is None

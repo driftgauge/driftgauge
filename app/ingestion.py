@@ -164,6 +164,39 @@ def delete_source(source_key: str, user_id: str | None = None) -> bool:
     return bool(result.rowcount)
 
 
+def clear_source_data(source_key: str, user_id: str | None = None) -> dict[str, Any] | None:
+    source = get_source(source_key, user_id)
+    if not source:
+        return None
+
+    with get_conn() as conn:
+        deleted_items = conn.execute("DELETE FROM ingested_items WHERE source_key = ?", (source_key,)).rowcount
+        if user_id:
+            deleted_entries = conn.execute(
+                "DELETE FROM entries WHERE user_id = ? AND source = ?",
+                (user_id, source["label"]),
+            ).rowcount
+            conn.execute(
+                "UPDATE ingestion_sources SET last_checked_at = NULL, last_status = NULL WHERE source_key = ? AND user_id = ?",
+                (source_key, user_id),
+            )
+        else:
+            deleted_entries = conn.execute(
+                "DELETE FROM entries WHERE source = ?",
+                (source["label"],),
+            ).rowcount
+            conn.execute(
+                "UPDATE ingestion_sources SET last_checked_at = NULL, last_status = NULL WHERE source_key = ?",
+                (source_key,),
+            )
+
+    return {
+        "source_key": source_key,
+        "deleted_entries": deleted_entries,
+        "deleted_items": deleted_items,
+    }
+
+
 def item_seen(item_hash: str) -> bool:
     with get_conn() as conn:
         row = conn.execute("SELECT 1 FROM ingested_items WHERE item_hash = ?", (item_hash,)).fetchone()
@@ -355,10 +388,12 @@ async def ingest_sources_once(
     max_items_per_source: int = DEFAULT_HISTORICAL_MAX_ITEMS,
     source_keys: list[str] | None = None,
 ) -> IngestResult:
-    sources = [source for source in list_sources(user_id) if source["enabled"]]
+    all_sources = list_sources(user_id)
     if source_keys:
         allowed_keys = set(source_keys)
-        sources = [source for source in sources if source["source_key"] in allowed_keys]
+        sources = [source for source in all_sources if source["source_key"] in allowed_keys]
+    else:
+        sources = [source for source in all_sources if source["enabled"]]
     if respect_min_interval:
         sources = [source for source in sources if _source_is_due(source, ingestion_interval_minutes())]
     fetched = 0
