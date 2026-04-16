@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app.auth import ensure_auth_tables
@@ -51,8 +53,10 @@ def test_entry_ingest_and_analysis_flow() -> None:
 
 
 def test_import_files_disabled_in_serverless_deployments(monkeypatch) -> None:
-    headers = _auth_headers(username="api_import_disabled")
     monkeypatch.setenv("VERCEL", "1")
+    init_db()
+    ensure_auth_tables()
+    headers = _auth_headers(username="api_import_disabled")
     res = client.post(
         "/import/files",
         headers=headers,
@@ -73,3 +77,15 @@ def test_cron_endpoint_requires_secret_and_runs(monkeypatch) -> None:
     body = allowed.json()
     assert "ingestion" in body
     assert "jobs" in body
+
+
+def test_vercel_defaults_sqlite_to_tmp(monkeypatch) -> None:
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("DRIFTGAUGE_DB_PATH", raising=False)
+    monkeypatch.delenv("SENTINEL_DB_PATH", raising=False)
+
+    from app import storage
+
+    resolved = storage._resolve_db_path()
+    assert resolved == Path("/tmp/driftgauge.db")

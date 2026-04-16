@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-from .config import database_url, is_postgres
+from .config import database_url, is_postgres, is_vercel
 from .models import Alert, Entry, FeatureSummary
 
 try:
@@ -59,6 +59,9 @@ def _resolve_db_path() -> Path:
     env_path = os.getenv("DRIFTGAUGE_DB_PATH") or os.getenv("SENTINEL_DB_PATH")
     if env_path:
         return Path(env_path).expanduser()
+
+    if is_vercel() and not database_url():
+        return Path("/tmp/driftgauge.db")
 
     default_path = root / "driftgauge.db"
     legacy_path = root / "sentinel.db"
