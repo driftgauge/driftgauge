@@ -3,13 +3,19 @@ from __future__ import annotations
 import os
 import re
 
+INVISIBLE_CHARS_RE = re.compile(r"[  ᠎ -‏ -  ⁠-⁯﻿]")
+
+
+def normalize_text(value: str) -> str:
+    return INVISIBLE_CHARS_RE.sub("", value).strip()
+
 
 def _env(name: str) -> str:
-    return os.getenv(name, "").strip()
+    return normalize_text(os.getenv(name, ""))
 
 
 def _slugify(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower())
+    slug = re.sub(r"[^a-z0-9]+", "-", normalize_text(value).lower())
     return slug.strip("-")
 
 
@@ -83,7 +89,7 @@ def social_handles() -> list[str]:
     handles: list[str] = []
     seen: set[str] = set()
     for part in re.split(r"[\s,]+", raw):
-        handle = part.strip().lstrip("@").strip()
+        handle = normalize_text(part).lstrip("@").strip()
         if not handle:
             continue
         lowered = handle.lower()

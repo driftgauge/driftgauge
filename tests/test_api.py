@@ -197,3 +197,14 @@ def test_public_summary_exposes_only_neutral_metrics() -> None:
     assert 'risk_score' not in body
     assert all('word_count' in item for item in body['recent_activity'])
     assert all('preview' not in item for item in body['recent_activity'])
+
+
+
+def test_login_normalizes_invisible_username_chars() -> None:
+    password = 'password123'
+    reg = client.post('/auth/register', json={'username': 'invisible_user', 'password': password})
+    assert reg.status_code == 200
+
+    login = client.post('/auth/login', json={'username': 'invisible_user ⁠', 'password': password})
+    assert login.status_code == 200
+    assert login.json()['username'] == 'invisible_user'
