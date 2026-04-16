@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import timezone
 
 import asyncio
-import os
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 from .alerts import ensure_alert_settings_tables, get_alert_settings, send_email_alert, upsert_alert_settings
 from .analyzer import analyze_entries
 from .auth import create_session, create_user, ensure_auth_tables, require_auth, verify_user
+from .config import background_loop_enabled, cron_secret, local_file_imports_enabled
 from .connectors.files import import_from_directory
 from .ingestion import background_ingestion_loop, ensure_ingestion_tables, ingest_sources_once, list_sources, upsert_source
 from .models import AlertSettingsRequest, AnalysisRequest, Entry, EntryCreate, HealthResponse, ImportRequest, IngestionSourceRequest, LoginRequest, PrivacySettings, RegisterRequest, ScheduleSettings
@@ -26,7 +27,7 @@ ingestion_stop_event = asyncio.Event()
 BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR / "app" / "static"
 TEMPLATES_DIR = BASE_DIR / "app" / "templates"
-RUN_BACKGROUND_LOOP = os.getenv("DRIFTGAUGE_DISABLE_BACKGROUND_LOOP", "0") != "1" and not os.getenv("VERCEL")
+RUN_BACKGROUND_LOOP = background_loop_enabled()
 
 
 @asynccontextmanager
@@ -58,7 +59,11 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    return templates.TemplateResponse(request, "index.html", {})
+    return templates.TemplateResponse(
+        request,
+        "index.html",
+        {"local_file_imports_enabled": local_file_imports_enabled()},
+    )
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -120,6 +125,9 @@ def get_alerts(user_id: str | None = None, limit: int = Query(50, ge=1, le=500),
 
 @app.post("/import/files")
 def import_files(payload: ImportRequest, _: str = Depends(require_auth)):
+    if not local_file_imports_enabled():
+        raise HTTPException(status_code=403, detail="Local file imports are disabled in this deployment")
+
     settings = get_user_settings(payload.user_id)
     if not settings["allow_file_imports"]:
         raise HTTPException(status_code=403, detail="File imports are disabled for this user")
@@ -186,6 +194,36 @@ def create_ingestion_source(payload: IngestionSourceRequest, _: str = Depends(re
 async def run_ingestion_now(_: str = Depends(require_auth)):
     result = await ingest_sources_once()
     return {"fetched_sources": result.fetched_sources, "imported_entries": result.imported_entries, "errors": result.errors}
+
+
+def require_cron_auth(authorization: str | None = Header(default=None, alias="Authorization")) -> None:
+    expected = cron_secret()
+    if not expected:
+        raise HTTPException(status_code=503, detail="Cron secret is not configured")
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    provided = authorization.removeprefix("Bearer ").strip()
+    if not secrets.compare_digest(provided, expected):
+        raise HTTPException(status_code=401, detail="Invalid cron token")
+
+
+@app.get("/cron/run")
+def run_cron(_: None = Depends(require_cron_auth)):
+    ingestion = asyncio.run(ingest_sources_once(respect_min_interval=True))
+    scheduled = run_due_jobs()
+    return {
+        "ingestion": {
+            "fetched_sources": ingestion.fetched_sources,
+            "imported_entries": ingestion.imported_entries,
+            "errors": ingestion.errors,
+        },
+        "jobs": {
+            "analyzed_users": scheduled.analyzed_users,
+            "created_alerts": scheduled.created_alerts,
+        },
+    }
 
 
 @app.get("/alerts/settings/{user_id}")

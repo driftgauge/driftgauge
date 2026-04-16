@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
-import sqlite3
+from datetime import timedelta
 
-from .storage import DB_PATH, get_conn
+from .storage import get_conn, utc_now
 
 
 @dataclass
@@ -58,13 +57,14 @@ def get_user_settings(user_id: str) -> dict:
 def apply_retention(user_id: str) -> RetentionSummary:
     settings = get_user_settings(user_id)
     retention_days = settings["retention_days"]
+    cutoff = (utc_now() - timedelta(days=retention_days)).isoformat()
     with get_conn() as conn:
         cur1 = conn.execute(
-            "DELETE FROM entries WHERE user_id = ? AND datetime(created_at) < datetime('now', ?)",
-            (user_id, f"-{retention_days} days"),
+            "DELETE FROM entries WHERE user_id = ? AND created_at < ?",
+            (user_id, cutoff),
         )
         cur2 = conn.execute(
-            "DELETE FROM alerts WHERE user_id = ? AND datetime(created_at) < datetime('now', ?)",
-            (user_id, f"-{retention_days} days"),
+            "DELETE FROM alerts WHERE user_id = ? AND created_at < ?",
+            (user_id, cutoff),
         )
     return RetentionSummary(deleted_entries=cur1.rowcount, deleted_alerts=cur2.rowcount)

@@ -5,7 +5,7 @@ import hashlib
 import json
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urljoin
 from xml.etree import ElementTree
@@ -13,7 +13,7 @@ from xml.etree import ElementTree
 import httpx
 from bs4 import BeautifulSoup
 
-from .storage import get_conn, insert_entry
+from .storage import get_conn, id_column_sql, insert_entry
 
 DEFAULT_INGEST_INTERVAL_MINUTES = 30
 DEFAULT_USER_AGENT = os.getenv("DRIFTGAUGE_USER_AGENT") or "DriftgaugeBot/0.1 (+https://driftgauge.com)"
@@ -29,9 +29,9 @@ class IngestResult:
 def ensure_ingestion_tables() -> None:
     with get_conn() as conn:
         conn.executescript(
-            """
+            f"""
             CREATE TABLE IF NOT EXISTS ingestion_sources (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {id_column_sql()},
                 user_id TEXT NOT NULL,
                 source_key TEXT NOT NULL UNIQUE,
                 label TEXT NOT NULL,
@@ -44,7 +44,7 @@ def ensure_ingestion_tables() -> None:
             );
 
             CREATE TABLE IF NOT EXISTS ingested_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {id_column_sql()},
                 source_key TEXT NOT NULL,
                 item_hash TEXT NOT NULL UNIQUE,
                 item_url TEXT,
@@ -95,7 +95,7 @@ def item_seen(item_hash: str) -> bool:
 def remember_item(source_key: str, item_hash: str, item_url: str | None, title: str | None) -> None:
     with get_conn() as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO ingested_items (source_key, item_hash, item_url, title, created_at) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO ingested_items (source_key, item_hash, item_url, title, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(item_hash) DO NOTHING",
             (source_key, item_hash, item_url, title, datetime.now(timezone.utc).isoformat()),
         )
 
@@ -160,8 +160,22 @@ async def _fetch_url(client: httpx.AsyncClient, url: str) -> tuple[str, str]:
     return response.text, response.headers.get("content-type", "")
 
 
-async def ingest_sources_once(user_id: str | None = None) -> IngestResult:
+def _source_is_due(source: dict[str, Any], min_interval_minutes: int) -> bool:
+    last_checked_at = source.get("last_checked_at")
+    if not last_checked_at:
+        return True
+
+    last_checked = datetime.fromisoformat(last_checked_at)
+    if last_checked.tzinfo is None:
+        last_checked = last_checked.replace(tzinfo=timezone.utc)
+
+    return datetime.now(timezone.utc) - last_checked.astimezone(timezone.utc) >= timedelta(minutes=min_interval_minutes)
+
+
+async def ingest_sources_once(user_id: str | None = None, respect_min_interval: bool = False) -> IngestResult:
     sources = [source for source in list_sources(user_id) if source["enabled"]]
+    if respect_min_interval:
+        sources = [source for source in sources if _source_is_due(source, DEFAULT_INGEST_INTERVAL_MINUTES)]
     fetched = 0
     imported = 0
     errors: list[str] = []

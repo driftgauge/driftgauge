@@ -48,3 +48,28 @@ def test_entry_ingest_and_analysis_flow() -> None:
     assert body["user_id"] == "api-user"
     assert body["risk_score"] >= 20
     assert "recommendations" in body
+
+
+def test_import_files_disabled_in_serverless_deployments(monkeypatch) -> None:
+    headers = _auth_headers(username="api_import_disabled")
+    monkeypatch.setenv("VERCEL", "1")
+    res = client.post(
+        "/import/files",
+        headers=headers,
+        json={"user_id": "api-user", "directory": "data/imports/demo-user", "source": "import"},
+    )
+    assert res.status_code == 403
+    assert "disabled" in res.json()["detail"].lower()
+
+
+def test_cron_endpoint_requires_secret_and_runs(monkeypatch) -> None:
+    monkeypatch.setenv("CRON_SECRET", "test-secret")
+
+    denied = client.get("/cron/run")
+    assert denied.status_code == 401
+
+    allowed = client.get("/cron/run", headers={"Authorization": "Bearer test-secret"})
+    assert allowed.status_code == 200
+    body = allowed.json()
+    assert "ingestion" in body
+    assert "jobs" in body

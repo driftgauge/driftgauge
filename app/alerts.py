@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from .models import Alert
-from .storage import get_conn
+from .storage import get_conn, id_column_sql
 
 DEFAULT_EMAIL = ""
 DEFAULT_FROM = "Driftgauge <alerts@example.com>"
@@ -16,7 +16,7 @@ DEFAULT_FROM = "Driftgauge <alerts@example.com>"
 def ensure_alert_settings_tables() -> None:
     with get_conn() as conn:
         conn.executescript(
-            """
+            f"""
             CREATE TABLE IF NOT EXISTS alert_settings (
                 user_id TEXT PRIMARY KEY,
                 email_enabled INTEGER NOT NULL DEFAULT 0,
@@ -26,7 +26,7 @@ def ensure_alert_settings_tables() -> None:
             );
 
             CREATE TABLE IF NOT EXISTS alert_deliveries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {id_column_sql()},
                 user_id TEXT NOT NULL,
                 channel TEXT NOT NULL,
                 destination TEXT NOT NULL,

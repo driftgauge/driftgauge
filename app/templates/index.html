@@ -55,6 +55,7 @@
 
     <section class="card">
       <h2>Import opted-in files</h2>
+      {% if local_file_imports_enabled %}
       <form id="import-form">
         <label>User ID<input name="user_id" value="demo-user" required></label>
         <label>Directory<input name="directory" value="data/imports/demo-user" required></label>
@@ -62,6 +63,9 @@
         <button type="submit">Import files</button>
       </form>
       <pre id="import-result"></pre>
+      {% else %}
+      <p class="subtle">Local file imports are disabled in this deployment. Use source ingestion or run file imports from a local environment.</p>
+      {% endif %}
     </section>
 
     <section class="card">

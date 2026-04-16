@@ -6,11 +6,12 @@ It is designed as a privacy-conscious, user-configured early-warning tool for re
 
 ## What it does
 - Ingests opted-in text entries with timestamps and source labels
-- Stores entries locally in SQLite by default
+- Stores entries locally in SQLite by default, or in Postgres for production deployments
 - Computes simple baseline and anomaly features
 - Scores recent entries and produces plain-language alerts
 - Supports user-configured source ingestion
 - Supports opt-in email delivery when runtime credentials are provided
+- Supports scheduled analysis in long-running environments or through a cron endpoint on Vercel
 
 ## What it does not do
 - Diagnose mania, psychosis, or any mental health condition
@@ -21,7 +22,8 @@ It is designed as a privacy-conscious, user-configured early-warning tool for re
 ## Stack
 - Python 3.11+
 - FastAPI
-- SQLite
+- SQLite for local development
+- Postgres for production deployments
 - Pydantic
 
 ## Quick start
@@ -40,7 +42,12 @@ Then open:
 Copy `.env.example` or set these directly in your runtime:
 
 ```bash
+# Local development
 DRIFTGAUGE_DB_PATH=driftgauge.db
+
+# Production or shared deployments
+DATABASE_URL=
+CRON_SECRET=
 RESEND_API_KEY=
 DRIFTGAUGE_EMAIL_FROM="Driftgauge <alerts@example.com>"
 DRIFTGAUGE_USER_AGENT="DriftgaugeBot/0.1 (+https://driftgauge.com)"
@@ -49,6 +56,7 @@ DRIFTGAUGE_USER_AGENT="DriftgaugeBot/0.1 (+https://driftgauge.com)"
 Notes:
 - If an older `sentinel.db` already exists, Driftgauge will reuse it automatically unless `DRIFTGAUGE_DB_PATH` is set.
 - Passwords are hashed before storage. Older legacy SHA-256 hashes are upgraded on successful login.
+- Local file imports are disabled automatically on Vercel unless you explicitly override `DRIFTGAUGE_ENABLE_LOCAL_FILE_IMPORTS=1`.
 
 ## Main endpoints
 - `GET /health`
@@ -65,15 +73,33 @@ Notes:
 - `POST /schedule/run`
 - `GET/POST /ingestion/sources`
 - `POST /ingestion/run`
+- `GET /cron/run`
 - `GET/POST /alerts/settings/{user_id}`
 
 Most data endpoints require the `X-Auth-Token` header from login or registration.
+The cron endpoint requires `Authorization: Bearer <CRON_SECRET>`.
 
-## Background behavior
-- The app runs an internal background ingestion loop every 30 minutes in normal long-running deployments.
-- It only ingests sources you explicitly configure.
-- Email delivery is opt-in and requires runtime env configuration.
-- On Vercel, the background loop is disabled automatically because the app runs as a serverless function.
+## Production on Vercel
+Driftgauge is production-ready on Vercel when you pair it with a persistent Postgres database and a cron secret.
+
+### Required Vercel environment variables
+- `DATABASE_URL` - a Postgres connection string
+- `CRON_SECRET` - Vercel uses this to protect `/cron/run`
+
+### Optional Vercel environment variables
+- `RESEND_API_KEY`
+- `DRIFTGAUGE_EMAIL_FROM`
+- `DRIFTGAUGE_USER_AGENT`
+
+### Vercel behavior
+- Root entrypoint: `app.py`
+- `vercel.json` schedules `/cron/run` every 5 minutes
+- `/cron/run` performs due source ingestion and due scheduled analysis jobs
+- Local file imports are disabled by default in Vercel deployments
+- The background ingestion loop is disabled automatically on Vercel because the app runs as a serverless function
+
+### Important production note
+Do not use SQLite for production Vercel deployments. The serverless filesystem is ephemeral, so persistent data belongs in Postgres via `DATABASE_URL`.
 
 ## Demo data
 Sample opted-in files live in:
@@ -85,9 +111,7 @@ These files are synthetic examples intended for local demos and tests.
 - Docker Compose example: `docker-compose.yml`
 - PM2 example: `ecosystem.driftgauge.config.cjs`
 - Vercel entrypoint: root `app.py`
-
-### Vercel caveat
-This project currently uses SQLite for storage. That is fine for local development and demos, but it is not a production-safe persistence layer on Vercel because the serverless filesystem is ephemeral.
+- Vercel cron config: `vercel.json`
 
 ## Open-source notes
 - Please do not commit real user writing, live credentials, or private monitoring targets.

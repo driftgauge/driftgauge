@@ -135,19 +135,22 @@ document.getElementById('analyze-form').addEventListener('submit', async (event)
   }
 });
 
-document.getElementById('import-form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const form = new FormData(event.target);
-  const payload = Object.fromEntries(form.entries());
-  const res = await apiFetch('/import/files', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+const importForm = document.getElementById('import-form');
+if (importForm) {
+  importForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.target);
+    const payload = Object.fromEntries(form.entries());
+    const res = await apiFetch('/import/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json();
+    document.getElementById('import-result').textContent = JSON.stringify(body, null, 2);
+    await refreshEntries();
   });
-  const body = await res.json();
-  document.getElementById('import-result').textContent = JSON.stringify(body, null, 2);
-  await refreshEntries();
-});
+}
 
 document.getElementById('privacy-form').addEventListener('submit', async (event) => {
   event.preventDefault();
