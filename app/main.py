@@ -264,7 +264,7 @@ async def lifespan(_: FastAPI):
     task: asyncio.Task | None = None
     if RUN_BACKGROUND_LOOP:
         ingestion_stop_event.clear()
-        task = asyncio.create_task(background_ingestion_loop(ingestion_stop_event))
+        task = asyncio.create_task(background_ingestion_loop(ingestion_stop_event, single_user_id() if single_user_enabled() else None))
 
     try:
         yield
@@ -449,13 +449,13 @@ def create_ingestion_source(payload: IngestionSourceRequest, _: str = Depends(re
 
 @app.post("/ingestion/run")
 async def run_ingestion_now(_: str = Depends(require_auth)):
-    result = await ingest_sources_once()
+    result = await ingest_sources_once(user_id=single_user_id() if single_user_enabled() else None)
     return {"fetched_sources": result.fetched_sources, "fetched_pages": result.fetched_pages, "imported_entries": result.imported_entries, "errors": result.errors}
 
 
 @app.post("/ingestion/backfill")
 async def run_ingestion_backfill(max_pages: int = Query(25, ge=1, le=100), max_items: int = Query(250, ge=1, le=2000), _: str = Depends(require_auth)):
-    result = await ingest_sources_once(historical_backfill=True, max_pages_per_source=max_pages, max_items_per_source=max_items)
+    result = await ingest_sources_once(user_id=single_user_id() if single_user_enabled() else None, historical_backfill=True, max_pages_per_source=max_pages, max_items_per_source=max_items)
     return {"fetched_sources": result.fetched_sources, "fetched_pages": result.fetched_pages, "imported_entries": result.imported_entries, "errors": result.errors}
 
 

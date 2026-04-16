@@ -336,10 +336,10 @@ async def ingest_sources_once(
     return IngestResult(fetched_sources=fetched, imported_entries=imported, errors=errors, fetched_pages=fetched_pages)
 
 
-async def background_ingestion_loop(stop_event: asyncio.Event) -> None:
+async def background_ingestion_loop(stop_event: asyncio.Event, user_id: str | None = None) -> None:
     while not stop_event.is_set():
         try:
-            await ingest_sources_once()
+            await ingest_sources_once(user_id=user_id)
         except Exception:
             pass
         try:

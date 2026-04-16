@@ -1,4 +1,5 @@
 import asyncio
+from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.auth import ensure_auth_tables
@@ -38,7 +39,8 @@ def test_historical_backfill_follows_same_origin_links(monkeypatch) -> None:
     import app.ingestion as ingestion
     from app.storage import list_entries
 
-    upsert_source('history-user', 'history-source', 'History Source', 'https://example.com/profile', 'site', True)
+    source_key = f'history-source-{uuid4().hex}'
+    upsert_source('history-user', source_key, 'History Source', 'https://example.com/profile', 'site', True)
 
     pages = {
         'https://example.com/profile': ('<html><body><article><h2>Latest</h2><p>This is the latest historical post with enough words to count.</p><a href="/p/1">Open</a></article><a href="/page/2">Older</a></body></html>', 'text/html'),
