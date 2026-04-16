@@ -181,12 +181,47 @@ button:hover {
   background: #1d4ed8;
 }
 
+.secondary-button {
+  background: #334155;
+}
+
+.secondary-button:hover {
+  background: #475569;
+}
+
 pre {
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .hidden {
+  display: none;
+}
+
+.session-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #334155;
+}
+
+.session-banner strong {
+  display: block;
+  font-size: 1.05rem;
+}
+
+#auth-shell.authenticated #auth-panel {
+  display: none;
+}
+
+#auth-shell.authenticated {
+  padding-bottom: 16px;
+}
+
+#auth-result:empty {
   display: none;
 }
 
@@ -211,4 +246,8 @@ pre {
     flex-direction: column;
   }
 
+  .session-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }

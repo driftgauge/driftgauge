@@ -38,24 +38,33 @@
       </section>
     </section>
 
-    <section class="card">
-      <h2>Login</h2>
-      {% if single_user_enabled %}
-      <p class="subtle">Single-user mode is enabled for {{ single_user_display_name }}.</p>
-      {% endif %}
-      {% if single_user_enabled and not single_user_registered %}
-      <form id="register-form">
-        <label>Username<input name="username" value="{{ default_username }}" {% if single_user_enabled %}readonly{% endif %} required></label>
-        <label>Password<input name="password" type="password" placeholder="Create initial password" required></label>
-        <button type="submit">Create login</button>
-      </form>
-      {% endif %}
-      <form id="login-form">
-        <label>Username<input name="username" value="{{ default_username }}" {% if single_user_enabled %}readonly{% endif %} required></label>
-        <label>Password<input name="password" type="password" placeholder="Enter your password" required></label>
-        <button type="submit">Login</button>
-      </form>
-      <pre id="auth-result"></pre>
+    <section class="card" id="auth-shell">
+      <div class="session-banner hidden" id="session-banner">
+        <div>
+          <p class="eyebrow">Private workspace</p>
+          <strong id="session-username"></strong>
+        </div>
+        <button type="button" id="logout-button" class="secondary-button">Log out</button>
+      </div>
+      <div id="auth-panel">
+        <h2>Login</h2>
+        {% if single_user_enabled %}
+        <p class="subtle">Single-user mode is enabled for {{ single_user_display_name }}.</p>
+        {% endif %}
+        {% if single_user_enabled and not single_user_registered %}
+        <form id="register-form">
+          <label>Username<input name="username" value="{{ default_username }}" {% if single_user_enabled %}readonly{% endif %} required></label>
+          <label>Password<input name="password" type="password" placeholder="Create initial password" required></label>
+          <button type="submit">Create login</button>
+        </form>
+        {% endif %}
+        <form id="login-form">
+          <label>Username<input name="username" value="{{ default_username }}" {% if single_user_enabled %}readonly{% endif %} required></label>
+          <label>Password<input name="password" type="password" placeholder="Enter your password" required></label>
+          <button type="submit">Login</button>
+        </form>
+        <pre id="auth-result"></pre>
+      </div>
     </section>
 
     <div id="private-shell" class="hidden">

@@ -211,3 +211,28 @@ def test_login_normalizes_invisible_username_chars() -> None:
     login = client.post('/auth/login', json={'username': f'{username} ⁠', 'password': password})
     assert login.status_code == 200
     assert login.json()['username'] == username
+
+
+
+def test_auth_session_and_logout_roundtrip() -> None:
+    username = 'session_tester'
+    password = 'password123'
+    reg = client.post('/auth/register', json={'username': username, 'password': password})
+    if reg.status_code == 200:
+        token = reg.json()['token']
+    else:
+        login = client.post('/auth/login', json={'username': username, 'password': password})
+        assert login.status_code == 200
+        token = login.json()['token']
+
+    session = client.get('/auth/session', headers={'X-Auth-Token': token})
+    assert session.status_code == 200
+    assert session.json()['username'] == username
+    assert session.json()['authenticated'] is True
+
+    logout = client.post('/auth/logout', headers={'X-Auth-Token': token})
+    assert logout.status_code == 200
+    assert logout.json()['ok'] is True
+
+    expired = client.get('/auth/session', headers={'X-Auth-Token': token})
+    assert expired.status_code == 401

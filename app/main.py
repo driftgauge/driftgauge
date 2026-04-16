@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 
 from .alerts import ensure_alert_settings_tables, get_alert_settings, send_email_alert, upsert_alert_settings
 from .analyzer import analyze_entries
-from .auth import create_session, create_user, ensure_auth_tables, require_auth, user_exists, verify_user
+from .auth import create_session, create_user, ensure_auth_tables, require_auth, revoke_session, user_exists, verify_user
 from .config import analysis_interval_minutes, background_loop_enabled, configured_social_sources, cron_secret, local_file_imports_enabled, normalize_text, single_user_display_name, single_user_enabled, single_user_id, single_user_username
 from .connectors.files import import_from_directory
 from .ingestion import background_ingestion_loop, ensure_ingestion_tables, ingest_sources_once, list_sources, upsert_source
@@ -336,6 +336,18 @@ def login(payload: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_session(username)
     return {"username": username, "token": token}
+
+
+@app.get("/auth/session")
+def auth_session(username: str = Depends(require_auth)):
+    return {"username": username, "authenticated": True}
+
+
+@app.post("/auth/logout")
+def logout(x_auth_token: str | None = Header(default=None), _: str = Depends(require_auth)):
+    if x_auth_token:
+        revoke_session(x_auth_token)
+    return {"ok": True}
 
 
 @app.post("/entries", response_model=Entry)

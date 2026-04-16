@@ -1,10 +1,47 @@
 const AUTH_TOKEN_KEY = 'driftgaugeAuthToken';
 let authToken = localStorage.getItem(AUTH_TOKEN_KEY) || '';
+let authenticatedUsername = '';
 
-function storeAuthToken(token) {
+function setPrivateVisibility(isLoggedIn, username = '') {
+  const shell = document.getElementById('private-shell');
+  const authShell = document.getElementById('auth-shell');
+  const sessionBanner = document.getElementById('session-banner');
+  const sessionUsername = document.getElementById('session-username');
+
+  if (shell) {
+    shell.classList.toggle('hidden', !isLoggedIn);
+  }
+  if (authShell) {
+    authShell.classList.toggle('authenticated', isLoggedIn);
+  }
+  if (sessionBanner) {
+    sessionBanner.classList.toggle('hidden', !isLoggedIn);
+  }
+  if (sessionUsername) {
+    sessionUsername.textContent = isLoggedIn ? `Logged in as ${username || 'authorized user'}` : '';
+  }
+}
+
+function storeAuthToken(token, username = '') {
   authToken = token;
+  authenticatedUsername = username;
   localStorage.setItem(AUTH_TOKEN_KEY, token);
-  setPrivateVisibility(Boolean(token));
+  const authResult = document.getElementById('auth-result');
+  if (authResult) {
+    authResult.textContent = '';
+  }
+  setPrivateVisibility(Boolean(token), username);
+}
+
+function clearAuthToken(message = '') {
+  authToken = '';
+  authenticatedUsername = '';
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  const authResult = document.getElementById('auth-result');
+  if (authResult) {
+    authResult.textContent = message;
+  }
+  setPrivateVisibility(false);
 }
 
 function currentEntriesUserId() {
@@ -13,12 +50,6 @@ function currentEntriesUserId() {
 
 function currentSourcesUserId() {
   return document.querySelector('#source-form input[name="user_id"]')?.value || 'demo-user';
-}
-
-function setPrivateVisibility(isLoggedIn) {
-  const shell = document.getElementById('private-shell');
-  if (!shell) return;
-  shell.classList.toggle('hidden', !isLoggedIn);
 }
 
 function renderPublicPlaceholder(label, summary, explanation) {
@@ -112,6 +143,10 @@ async function refreshSources() {
 
   const userId = currentSourcesUserId();
   const res = await apiFetch(`/ingestion/sources?user_id=${encodeURIComponent(userId)}`);
+  if (!res.ok) {
+    list.innerHTML = '<li>Log in to manage monitored sources.</li>';
+    return;
+  }
   const body = await res.json();
   list.innerHTML = '';
 
@@ -134,7 +169,28 @@ async function apiFetch(url, options = {}) {
   if (authToken) {
     headers['X-Auth-Token'] = authToken;
   }
-  return fetch(url, { ...options, headers });
+  const response = await fetch(url, { ...options, headers });
+  if (response.status === 401 && authToken) {
+    clearAuthToken(JSON.stringify({ detail: 'Session expired. Please log in again.' }, null, 2));
+  }
+  return response;
+}
+
+async function restoreSession() {
+  if (!authToken) {
+    setPrivateVisibility(false);
+    return false;
+  }
+
+  const res = await apiFetch('/auth/session');
+  if (!res.ok) {
+    return false;
+  }
+
+  const body = await res.json();
+  authenticatedUsername = body.username || '';
+  setPrivateVisibility(true, authenticatedUsername);
+  return true;
 }
 
 async function refreshEntries() {
@@ -146,6 +202,10 @@ async function refreshEntries() {
 
   const userId = currentEntriesUserId();
   const res = await apiFetch(`/entries?user_id=${encodeURIComponent(userId)}&limit=20`);
+  if (!res.ok) {
+    list.innerHTML = '<li>Log in to view collected entries.</li>';
+    return;
+  }
   const entries = await res.json();
   list.innerHTML = '';
 
@@ -176,7 +236,7 @@ if (registerForm) {
     });
     const body = await res.json();
     if (body.token) {
-      storeAuthToken(body.token);
+      storeAuthToken(body.token, body.user?.username || body.username || payload.username);
       await refreshEntries();
       await refreshSources();
     }
@@ -195,7 +255,7 @@ document.getElementById('login-form').addEventListener('submit', async (event) =
   });
   const body = await res.json();
   if (body.token) {
-    storeAuthToken(body.token);
+    storeAuthToken(body.token, body.username || payload.username);
     await refreshEntries();
     await refreshSources();
   }
@@ -350,8 +410,20 @@ document.getElementById('run-historical-backfill').addEventListener('click', asy
 
 document.getElementById('refresh-sources').addEventListener('click', refreshSources);
 document.getElementById('refresh-entries').addEventListener('click', refreshEntries);
+document.getElementById('logout-button').addEventListener('click', async () => {
+  if (authToken) {
+    await apiFetch('/auth/logout', { method: 'POST' });
+  }
+  clearAuthToken();
+  await refreshEntries();
+  await refreshSources();
+});
 
-setPrivateVisibility(Boolean(authToken));
-refreshEntries();
-refreshSources();
-refreshPublicSummary();
+async function initializeApp() {
+  await restoreSession();
+  await refreshEntries();
+  await refreshSources();
+  await refreshPublicSummary();
+}
+
+initializeApp();

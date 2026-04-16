@@ -117,6 +117,12 @@ def create_session(username: str) -> str:
     return token
 
 
+def revoke_session(token: str) -> None:
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    with get_conn() as conn:
+        conn.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash,))
+
+
 def get_username_for_token(token: str) -> str | None:
     token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     with get_conn() as conn:
