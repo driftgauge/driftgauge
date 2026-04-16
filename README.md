@@ -92,7 +92,7 @@ Driftgauge is production-ready on Vercel when you pair it with a persistent Post
 - `DRIFTGAUGE_USER_AGENT`
 
 ### Vercel behavior
-- Root entrypoint: `app.py`
+- Root entrypoint: `index.py`
 - `vercel.json` schedules `/cron/run` every 5 minutes
 - `/cron/run` performs due source ingestion and due scheduled analysis jobs
 - Local file imports are disabled by default in Vercel deployments
@@ -110,7 +110,7 @@ These files are synthetic examples intended for local demos and tests.
 ## Deployment notes
 - Docker Compose example: `docker-compose.yml`
 - PM2 example: `ecosystem.driftgauge.config.cjs`
-- Vercel entrypoint: root `app.py`
+- Vercel entrypoint: root `index.py`
 - Vercel cron config: `vercel.json`
 
 ## Open-source notes
