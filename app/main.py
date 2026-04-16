@@ -18,7 +18,7 @@ from .analyzer import analyze_entries
 from .auth import create_session, create_user, ensure_auth_tables, require_auth, revoke_session, user_exists, verify_user
 from .config import analysis_interval_minutes, background_loop_enabled, configured_social_sources, cron_secret, local_file_imports_enabled, normalize_text, single_user_display_name, single_user_enabled, single_user_id, single_user_username
 from .connectors.files import import_from_directory
-from .ingestion import background_ingestion_loop, ensure_ingestion_tables, ingest_sources_once, list_sources, upsert_source
+from .ingestion import background_ingestion_loop, delete_source, ensure_ingestion_tables, get_source, ingest_sources_once, list_sources, set_source_enabled, upsert_source
 from .models import AlertSettingsRequest, AnalysisRequest, Entry, EntryCreate, HealthResponse, ImportRequest, IngestionSourceRequest, LoginRequest, PrivacySettings, RegisterRequest, ScheduleSettings
 from .privacy import apply_retention, ensure_privacy_tables, get_user_settings, set_user_settings
 from .scheduler import ensure_scheduler_tables, list_jobs, run_due_jobs, upsert_job
@@ -457,6 +457,38 @@ def get_ingestion_sources(user_id: str | None = None, _: str = Depends(require_a
 @app.post("/ingestion/sources")
 def create_ingestion_source(payload: IngestionSourceRequest, _: str = Depends(require_auth)):
     return upsert_source(resolve_user_id(payload.user_id), payload.source_key, payload.label, payload.url, payload.kind, payload.enabled)
+
+
+@app.post("/ingestion/sources/{source_key}/toggle")
+def toggle_ingestion_source(source_key: str, enabled: bool = Query(...), _: str = Depends(require_auth)):
+    scoped_user_id = single_user_id() if single_user_enabled() else None
+    source = set_source_enabled(source_key, enabled, scoped_user_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return source
+
+
+@app.delete("/ingestion/sources/{source_key}")
+def remove_ingestion_source(source_key: str, _: str = Depends(require_auth)):
+    scoped_user_id = single_user_id() if single_user_enabled() else None
+    deleted = delete_source(source_key, scoped_user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return {"ok": True, "source_key": source_key}
+
+
+@app.post("/ingestion/sources/{source_key}/run")
+async def run_ingestion_source(source_key: str, historical: bool = Query(False), _: str = Depends(require_auth)):
+    scoped_user_id = single_user_id() if single_user_enabled() else None
+    source = get_source(source_key, scoped_user_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+    result = await ingest_sources_once(
+        user_id=scoped_user_id,
+        historical_backfill=historical,
+        source_keys=[source_key],
+    )
+    return {"fetched_sources": result.fetched_sources, "fetched_pages": result.fetched_pages, "imported_entries": result.imported_entries, "errors": result.errors}
 
 
 @app.post("/ingestion/run")

@@ -146,6 +146,7 @@
 
     <section class="card">
       <h2>Source ingestion</h2>
+      <p class="subtle">Edit, pause, retry, or delete sources from the list below.</p>
       <form id="source-form">
         <label>User ID<input name="user_id" value="{{ default_user_id }}" {% if single_user_enabled %}readonly{% endif %} required></label>
         <label>Source key<input name="source_key" value="demo-site" required></label>
@@ -164,13 +165,18 @@
           </select>
         </label>
         <label class="checkbox-row"><input name="enabled" type="checkbox" checked> Enable source</label>
-        <button type="submit">Save source</button>
+        <div class="action-row">
+          <button type="submit" id="source-submit-button">Save source</button>
+          <button type="button" id="source-reset-button" class="secondary-button hidden">Cancel edit</button>
+        </div>
       </form>
-      <button id="run-ingestion-now">Run ingestion now</button>
-      <button id="run-historical-backfill">Run historical backfill</button>
-      <button id="refresh-sources">Refresh sources</button>
+      <div class="action-row">
+        <button id="run-ingestion-now">Run ingestion now</button>
+        <button id="run-historical-backfill">Run historical backfill</button>
+        <button id="refresh-sources" class="secondary-button">Refresh sources</button>
+      </div>
       <pre id="ingestion-result"></pre>
-      <ul id="sources-list" class="entries"></ul>
+      <ul id="sources-list" class="entries source-list"></ul>
     </section>
 
     <section class="card">

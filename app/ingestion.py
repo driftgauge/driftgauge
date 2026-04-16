@@ -92,6 +92,12 @@ def ensure_ingestion_tables() -> None:
         )
 
 
+def _serialize_source_row(row: Any) -> dict[str, Any]:
+    source = {key: row[key] for key in row.keys()}
+    source["enabled"] = bool(source.get("enabled"))
+    return source
+
+
 def upsert_source(user_id: str, source_key: str, label: str, url: str, kind: str, enabled: bool = True) -> dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat()
     with get_conn() as conn:
@@ -120,7 +126,42 @@ def list_sources(user_id: str | None = None) -> list[dict[str, Any]]:
     query += " ORDER BY id"
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
-    return [{key: row[key] for key in row.keys()} for row in rows]
+    return [_serialize_source_row(row) for row in rows]
+
+
+def get_source(source_key: str, user_id: str | None = None) -> dict[str, Any] | None:
+    query = "SELECT * FROM ingestion_sources WHERE source_key = ?"
+    params: list[Any] = [source_key]
+    if user_id:
+        query += " AND user_id = ?"
+        params.append(user_id)
+    with get_conn() as conn:
+        row = conn.execute(query, params).fetchone()
+    return _serialize_source_row(row) if row else None
+
+
+def set_source_enabled(source_key: str, enabled: bool, user_id: str | None = None) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        if user_id:
+            conn.execute(
+                "UPDATE ingestion_sources SET enabled = ? WHERE source_key = ? AND user_id = ?",
+                (1 if enabled else 0, source_key, user_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE ingestion_sources SET enabled = ? WHERE source_key = ?",
+                (1 if enabled else 0, source_key),
+            )
+    return get_source(source_key, user_id)
+
+
+def delete_source(source_key: str, user_id: str | None = None) -> bool:
+    with get_conn() as conn:
+        if user_id:
+            result = conn.execute("DELETE FROM ingestion_sources WHERE source_key = ? AND user_id = ?", (source_key, user_id))
+        else:
+            result = conn.execute("DELETE FROM ingestion_sources WHERE source_key = ?", (source_key,))
+    return bool(result.rowcount)
 
 
 def item_seen(item_hash: str) -> bool:
@@ -312,8 +353,12 @@ async def ingest_sources_once(
     historical_backfill: bool = False,
     max_pages_per_source: int = DEFAULT_HISTORICAL_MAX_PAGES,
     max_items_per_source: int = DEFAULT_HISTORICAL_MAX_ITEMS,
+    source_keys: list[str] | None = None,
 ) -> IngestResult:
     sources = [source for source in list_sources(user_id) if source["enabled"]]
+    if source_keys:
+        allowed_keys = set(source_keys)
+        sources = [source for source in sources if source["source_key"] in allowed_keys]
     if respect_min_interval:
         sources = [source for source in sources if _source_is_due(source, ingestion_interval_minutes())]
     fetched = 0

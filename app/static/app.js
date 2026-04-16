@@ -1,6 +1,7 @@
 const AUTH_TOKEN_KEY = 'driftgaugeAuthToken';
 let authToken = localStorage.getItem(AUTH_TOKEN_KEY) || '';
 let authenticatedUsername = '';
+let sourceIndex = new Map();
 
 function setPrivateVisibility(isLoggedIn, username = '') {
   const shell = document.getElementById('private-shell');
@@ -97,6 +98,67 @@ function renderStatCard(item) {
   `;
 }
 
+const sourceForm = document.getElementById('source-form');
+const sourceSubmitButton = document.getElementById('source-submit-button');
+const sourceResetButton = document.getElementById('source-reset-button');
+const defaultSourceFormValues = sourceForm ? {
+  source_key: sourceForm.querySelector('input[name="source_key"]').value,
+  label: sourceForm.querySelector('input[name="label"]').value,
+  url: sourceForm.querySelector('input[name="url"]').value,
+  kind: sourceForm.querySelector('select[name="kind"]').value,
+  enabled: sourceForm.querySelector('input[name="enabled"]').checked,
+} : null;
+
+function setIngestionResult(body) {
+  document.getElementById('ingestion-result').textContent = JSON.stringify(body, null, 2);
+}
+
+function resetSourceForm() {
+  if (!sourceForm || !defaultSourceFormValues) return;
+  sourceForm.querySelector('input[name="source_key"]').value = defaultSourceFormValues.source_key;
+  sourceForm.querySelector('input[name="label"]').value = defaultSourceFormValues.label;
+  sourceForm.querySelector('input[name="url"]').value = defaultSourceFormValues.url;
+  sourceForm.querySelector('select[name="kind"]').value = defaultSourceFormValues.kind;
+  sourceForm.querySelector('input[name="enabled"]').checked = defaultSourceFormValues.enabled;
+  sourceSubmitButton.textContent = 'Save source';
+  sourceResetButton.classList.add('hidden');
+}
+
+function populateSourceForm(source) {
+  if (!sourceForm) return;
+  sourceForm.querySelector('input[name="source_key"]').value = source.source_key;
+  sourceForm.querySelector('input[name="label"]').value = source.label;
+  sourceForm.querySelector('input[name="url"]').value = source.url;
+  sourceForm.querySelector('select[name="kind"]').value = source.kind;
+  sourceForm.querySelector('input[name="enabled"]').checked = Boolean(source.enabled);
+  sourceSubmitButton.textContent = 'Update source';
+  sourceResetButton.classList.remove('hidden');
+  sourceForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderSourceItem(source) {
+  const toggleLabel = source.enabled ? 'Pause' : 'Enable';
+  const status = source.last_status || 'never run';
+  return `
+    <li data-source-key="${source.source_key}">
+      <div class="source-title-row">
+        <div>
+          <strong>${source.label}</strong>
+          <div>${source.kind.toUpperCase()}</div>
+          <div class="source-url">${source.url}</div>
+          <div class="source-status">${status}</div>
+        </div>
+      </div>
+      <div class="source-actions">
+        <button type="button" data-source-action="edit" data-source-key="${source.source_key}" class="secondary-button">Edit</button>
+        <button type="button" data-source-action="toggle" data-source-key="${source.source_key}" class="secondary-button">${toggleLabel}</button>
+        <button type="button" data-source-action="run" data-source-key="${source.source_key}">Retry now</button>
+        <button type="button" data-source-action="delete" data-source-key="${source.source_key}" class="secondary-button">Delete</button>
+      </div>
+    </li>
+  `;
+}
+
 async function refreshPublicSummary() {
   const userId = currentEntriesUserId();
   const res = await fetch(`/public/summary?user_id=${encodeURIComponent(userId)}`);
@@ -137,6 +199,7 @@ async function refreshPublicSummary() {
 async function refreshSources() {
   const list = document.getElementById('sources-list');
   if (!authToken) {
+    sourceIndex = new Map();
     list.innerHTML = '<li>Log in to manage monitored sources.</li>';
     return;
   }
@@ -144,10 +207,12 @@ async function refreshSources() {
   const userId = currentSourcesUserId();
   const res = await apiFetch(`/ingestion/sources?user_id=${encodeURIComponent(userId)}`);
   if (!res.ok) {
+    sourceIndex = new Map();
     list.innerHTML = '<li>Log in to manage monitored sources.</li>';
     return;
   }
   const body = await res.json();
+  sourceIndex = new Map(body.map((source) => [source.source_key, source]));
   list.innerHTML = '';
 
   if (!body.length) {
@@ -157,10 +222,55 @@ async function refreshSources() {
     return;
   }
 
-  for (const source of body) {
-    const li = document.createElement('li');
-    li.textContent = `${source.label} — ${source.url} — ${source.last_status || 'never run'}`;
-    list.appendChild(li);
+  list.innerHTML = body.map(renderSourceItem).join('');
+}
+
+async function handleSourceAction(event) {
+  const button = event.target.closest('button[data-source-action]');
+  if (!button) return;
+
+  const sourceKey = button.dataset.sourceKey;
+  const action = button.dataset.sourceAction;
+  const source = sourceIndex.get(sourceKey);
+  if (!source) return;
+
+  if (action === 'edit') {
+    populateSourceForm(source);
+    return;
+  }
+
+  if (action === 'toggle') {
+    const res = await apiFetch(`/ingestion/sources/${encodeURIComponent(sourceKey)}/toggle?enabled=${String(!source.enabled)}`, { method: 'POST' });
+    const body = await res.json();
+    setIngestionResult(body);
+    await refreshSources();
+    await refreshPublicSummary();
+    return;
+  }
+
+  if (action === 'run') {
+    const res = await apiFetch(`/ingestion/sources/${encodeURIComponent(sourceKey)}/run`, { method: 'POST' });
+    const body = await res.json();
+    setIngestionResult(body);
+    await refreshSources();
+    await refreshEntries();
+    await refreshPublicSummary();
+    return;
+  }
+
+  if (action === 'delete') {
+    if (!window.confirm(`Delete source ${source.label}?`)) {
+      return;
+    }
+    const res = await apiFetch(`/ingestion/sources/${encodeURIComponent(sourceKey)}`, { method: 'DELETE' });
+    const body = await res.json();
+    setIngestionResult(body);
+    if (sourceForm?.querySelector('input[name="source_key"]')?.value === sourceKey) {
+      resetSourceForm();
+    }
+    await refreshSources();
+    await refreshEntries();
+    await refreshPublicSummary();
   }
 }
 
@@ -385,7 +495,8 @@ document.getElementById('source-form').addEventListener('submit', async (event) 
     body: JSON.stringify(payload),
   });
   const body = await res.json();
-  document.getElementById('ingestion-result').textContent = JSON.stringify(body, null, 2);
+  setIngestionResult(body);
+  resetSourceForm();
   await refreshSources();
   await refreshPublicSummary();
 });
@@ -393,7 +504,7 @@ document.getElementById('source-form').addEventListener('submit', async (event) 
 document.getElementById('run-ingestion-now').addEventListener('click', async () => {
   const res = await apiFetch('/ingestion/run', { method: 'POST' });
   const body = await res.json();
-  document.getElementById('ingestion-result').textContent = JSON.stringify(body, null, 2);
+  setIngestionResult(body);
   await refreshSources();
   await refreshEntries();
   await refreshPublicSummary();
@@ -402,7 +513,7 @@ document.getElementById('run-ingestion-now').addEventListener('click', async () 
 document.getElementById('run-historical-backfill').addEventListener('click', async () => {
   const res = await apiFetch('/ingestion/backfill?max_pages=25&max_items=250', { method: 'POST' });
   const body = await res.json();
-  document.getElementById('ingestion-result').textContent = JSON.stringify(body, null, 2);
+  setIngestionResult(body);
   await refreshSources();
   await refreshEntries();
   await refreshPublicSummary();
@@ -410,6 +521,8 @@ document.getElementById('run-historical-backfill').addEventListener('click', asy
 
 document.getElementById('refresh-sources').addEventListener('click', refreshSources);
 document.getElementById('refresh-entries').addEventListener('click', refreshEntries);
+document.getElementById('sources-list').addEventListener('click', handleSourceAction);
+sourceResetButton?.addEventListener('click', resetSourceForm);
 document.getElementById('logout-button').addEventListener('click', async () => {
   if (authToken) {
     await apiFetch('/auth/logout', { method: 'POST' });

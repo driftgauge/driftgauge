@@ -86,3 +86,46 @@ def test_backfill_filters_auth_wall_content(monkeypatch) -> None:
 
     result = asyncio.run(ingestion.ingest_sources_once(user_id='history-user', historical_backfill=True, max_pages_per_source=2, max_items_per_source=5))
     assert result.imported_entries == 0
+
+
+
+def test_source_toggle_and_delete_endpoints() -> None:
+    headers = _auth_headers(username='source_manager')
+    source_key = f'manage-source-{uuid4().hex}'
+    upsert_source('demo-user', source_key, 'Managed Source', 'https://example.com/manage', 'site', True)
+
+    toggle = client.post(f'/ingestion/sources/{source_key}/toggle?enabled=false', headers=headers)
+    assert toggle.status_code == 200
+    assert toggle.json()['enabled'] is False
+
+    listed = client.get('/ingestion/sources?user_id=demo-user', headers=headers)
+    source = next(item for item in listed.json() if item['source_key'] == source_key)
+    assert source['enabled'] is False
+
+    deleted = client.delete(f'/ingestion/sources/{source_key}', headers=headers)
+    assert deleted.status_code == 200
+    assert deleted.json()['ok'] is True
+
+    listed_after = client.get('/ingestion/sources?user_id=demo-user', headers=headers)
+    assert all(item['source_key'] != source_key for item in listed_after.json())
+
+
+
+def test_run_single_source_endpoint(monkeypatch) -> None:
+    import app.ingestion as ingestion
+
+    headers = _auth_headers(username='source_runner')
+    source_key = f'run-source-{uuid4().hex}'
+    upsert_source('demo-user', source_key, 'Runnable Source', 'https://example.com/run', 'site', True)
+
+    async def fake_fetch(client, url):
+        assert url == 'https://example.com/run'
+        return ('<html><body><article><h2>Run Me</h2><p>This page has enough content to become an imported entry for the single-source run endpoint.</p></article></body></html>', 'text/html')
+
+    monkeypatch.setattr(ingestion, '_fetch_url', fake_fetch)
+
+    res = client.post(f'/ingestion/sources/{source_key}/run', headers=headers)
+    assert res.status_code == 200
+    body = res.json()
+    assert body['fetched_sources'] == 1
+    assert body['imported_entries'] == 1
