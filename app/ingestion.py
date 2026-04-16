@@ -32,6 +32,11 @@ IGNORED_HISTORY_PATH_SNIPPETS = (
     "/explore",
     "/discover",
     "/developer",
+    "/recover/",
+    "/reg/",
+    "/checkpoint/",
+    "/challenge/",
+    "/ads/create",
 )
 HISTORY_LINK_HINTS = (
     "/p/",
@@ -253,11 +258,40 @@ def _extract_items_for_page(source: dict[str, Any], body: str, content_type: str
     return _extract_site_content(body, page_url)
 
 
+def _is_blocked_or_low_value_item(item: dict[str, str]) -> bool:
+    url = (item.get("url") or "").lower()
+    title = (item.get("title") or "").lower()
+    text = (item.get("text") or "").lower()
+    combined = f"{title} {text}"
+
+    if any(snippet in url for snippet in IGNORED_HISTORY_PATH_SNIPPETS):
+        return True
+
+    blocked_markers = (
+        "create an account to connect with friends",
+        "i already have an account",
+        "log in or sign up",
+        "by tapping submit",
+        "recover your account",
+        "privacy policy and cookies policy",
+        "people who use our service may have uploaded your contact information",
+    )
+    if any(marker in combined for marker in blocked_markers):
+        return True
+
+    if len(text.strip()) < 30:
+        return True
+
+    return False
+
+
 def _persist_items_for_source(source: dict[str, Any], items: list[dict[str, str]], max_items: int | None = None) -> int:
     imported = 0
     for item in items:
         if max_items is not None and imported >= max_items:
             break
+        if _is_blocked_or_low_value_item(item):
+            continue
         item_hash = _hash_item(source["source_key"], item.get("title"), item["text"], item.get("url"))
         if item_seen(item_hash):
             continue

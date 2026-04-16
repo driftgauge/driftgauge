@@ -70,3 +70,19 @@ def test_backfill_endpoint_runs(headers=None) -> None:
     assert 'fetched_sources' in body
     assert 'fetched_pages' in body
     assert 'imported_entries' in body
+
+
+
+def test_backfill_filters_auth_wall_content(monkeypatch) -> None:
+    import app.ingestion as ingestion
+
+    source_key = f'blocked-source-{uuid4().hex}'
+    upsert_source('history-user', source_key, 'Blocked Source', 'https://www.facebook.com/example', 'facebook', True)
+
+    async def fake_fetch(client, url):
+        return ('<html><body><article><h2>Facebook</h2><p>Create an account to connect with friends, family and communities of people who share your interests. By tapping Submit you agree.</p><a href="/reg/">Open</a></article></body></html>', 'text/html')
+
+    monkeypatch.setattr(ingestion, '_fetch_url', fake_fetch)
+
+    result = asyncio.run(ingestion.ingest_sources_once(user_id='history-user', historical_backfill=True, max_pages_per_source=2, max_items_per_source=5))
+    assert result.imported_entries == 0
