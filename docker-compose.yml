@@ -1,0 +1,9 @@
+services:
+  driftgauge:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./driftgauge.db:/app/driftgauge.db
+    environment:
+      DRIFTGAUGE_DB_PATH: /app/driftgauge.db

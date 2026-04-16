@@ -1,0 +1,92 @@
+body {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  margin: 0;
+}
+
+.container {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+h1, h2, h3 {
+  margin-top: 0;
+}
+
+.subtle {
+  color: #94a3b8;
+}
+
+.card {
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  padding: 20px;
+  margin: 20px 0;
+}
+
+label {
+  display: block;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.checkbox-row input {
+  width: auto;
+  margin: 0;
+}
+
+input, textarea, button {
+  width: 100%;
+  margin-top: 6px;
+  border-radius: 10px;
+  border: 1px solid #475569;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  background: #0b1220;
+  color: #e2e8f0;
+}
+
+button {
+  background: #2563eb;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+button:hover {
+  background: #1d4ed8;
+}
+
+pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.hidden {
+  display: none;
+}
+
+.alert-panel {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #1e293b;
+  border: 1px solid #475569;
+}
+
+.entries {
+  padding-left: 18px;
+}
+
+.entries li {
+  margin: 10px 0;
+}

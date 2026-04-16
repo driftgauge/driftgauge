@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Driftgauge</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="container">
+    <h1>Driftgauge</h1>
+    <p class="subtle">Private baseline-deviation monitor for opted-in writing.</p>
+
+    <section class="card">
+      <h2>Auth</h2>
+      <form id="register-form">
+        <label>Username<input name="username" value="demo" required></label>
+        <label>Password<input name="password" type="password" placeholder="Create a password" required></label>
+        <button type="submit">Register</button>
+      </form>
+      <form id="login-form">
+        <label>Username<input name="username" value="demo" required></label>
+        <label>Password<input name="password" type="password" placeholder="Enter your password" required></label>
+        <button type="submit">Login</button>
+      </form>
+      <pre id="auth-result"></pre>
+    </section>
+
+    <section class="card">
+      <h2>Add entry</h2>
+      <form id="entry-form">
+        <label>User ID<input name="user_id" value="demo-user" required></label>
+        <label>Source<input name="source" value="journal" required></label>
+        <label>Text<textarea name="text" rows="6" required></textarea></label>
+        <button type="submit">Save entry</button>
+      </form>
+      <pre id="entry-result"></pre>
+    </section>
+
+    <section class="card">
+      <h2>Analyze latest entries</h2>
+      <form id="analyze-form">
+        <label>User ID<input name="user_id" value="demo-user" required></label>
+        <label>Window size<input name="window_size" type="number" value="4" min="3" max="50" required></label>
+        <button type="submit">Run analysis</button>
+      </form>
+      <div id="alert-panel" class="alert-panel hidden">
+        <h3>Latest alert</h3>
+        <p><strong>Level:</strong> <span id="alert-level"></span></p>
+        <p><strong>Risk score:</strong> <span id="alert-score"></span></p>
+        <p id="alert-explanation"></p>
+        <ul id="alert-recommendations"></ul>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Import opted-in files</h2>
+      <form id="import-form">
+        <label>User ID<input name="user_id" value="demo-user" required></label>
+        <label>Directory<input name="directory" value="data/imports/demo-user" required></label>
+        <label>Source<input name="source" value="journal-import" required></label>
+        <button type="submit">Import files</button>
+      </form>
+      <pre id="import-result"></pre>
+    </section>
+
+    <section class="card">
+      <h2>Privacy settings</h2>
+      <form id="privacy-form">
+        <label>User ID<input name="user_id" value="demo-user" required></label>
+        <label>Retention days<input name="retention_days" type="number" value="30" min="1" max="3650" required></label>
+        <label class="checkbox-row"><input name="allow_file_imports" type="checkbox" checked> Allow file imports</label>
+        <button type="submit">Save privacy settings</button>
+      </form>
+      <pre id="privacy-result"></pre>
+    </section>
+
+    <section class="card">
+      <h2>Scheduled analysis</h2>
+      <form id="schedule-form">
+        <label>User ID<input name="user_id" value="demo-user" required></label>
+        <label>Interval minutes<input name="interval_minutes" type="number" value="30" min="5" max="10080" required></label>
+        <label class="checkbox-row"><input name="enabled" type="checkbox" checked> Enable scheduled analysis</label>
+        <button type="submit">Save schedule</button>
+      </form>
+      <button id="run-schedule-now">Run due jobs now</button>
+      <pre id="schedule-result"></pre>
+    </section>
+
+    <section class="card">
+      <h2>Private alerts</h2>
+      <form id="alert-settings-form">
+        <label>User ID<input name="user_id" value="demo-user" required></label>
+        <label>Email<input name="email_to" type="email" placeholder="alerts@example.com"></label>
+        <label class="checkbox-row"><input name="email_enabled" type="checkbox"> Enable private email alerts</label>
+        <button type="submit">Save alert settings</button>
+      </form>
+      <pre id="alert-settings-result"></pre>
+    </section>
+
+    <section class="card">
+      <h2>Source ingestion</h2>
+      <form id="source-form">
+        <label>User ID<input name="user_id" value="demo-user" required></label>
+        <label>Source key<input name="source_key" value="demo-site" required></label>
+        <label>Label<input name="label" value="Example Blog" required></label>
+        <label>URL<input name="url" type="url" value="https://example.com" required></label>
+        <label>Kind
+          <select name="kind">
+            <option value="site">Website</option>
+            <option value="rss">RSS feed</option>
+          </select>
+        </label>
+        <label class="checkbox-row"><input name="enabled" type="checkbox" checked> Enable source</label>
+        <button type="submit">Save source</button>
+      </form>
+      <button id="run-ingestion-now">Run ingestion now</button>
+      <button id="refresh-sources">Refresh sources</button>
+      <pre id="ingestion-result"></pre>
+      <ul id="sources-list" class="entries"></ul>
+    </section>
+
+    <section class="card">
+      <h2>Recent entries</h2>
+      <button id="refresh-entries">Refresh</button>
+      <ul id="entries-list" class="entries"></ul>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
