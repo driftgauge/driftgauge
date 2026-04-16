@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from datetime import timezone
 
 import asyncio
@@ -29,6 +30,20 @@ STATIC_DIR = BASE_DIR / "app" / "static"
 TEMPLATES_DIR = BASE_DIR / "app" / "templates"
 RUN_BACKGROUND_LOOP = background_loop_enabled()
 
+STATE_LABELS = {
+    "none": "STEADY",
+    "low": "WATCH",
+    "moderate": "ELEVATED",
+    "high": "HIGH CONCERN",
+}
+
+STATE_SUMMARIES = {
+    "none": "No strong deviation from Nate's recent baseline.",
+    "low": "A few signals are drifting away from baseline.",
+    "moderate": "Several signals are elevated and worth a closer look.",
+    "high": "Multiple signals are sharply elevated right now.",
+}
+
 
 def resolve_user_id(requested_user_id: str | None = None) -> str:
     if single_user_enabled():
@@ -36,6 +51,111 @@ def resolve_user_id(requested_user_id: str | None = None) -> str:
     if requested_user_id:
         return requested_user_id
     raise HTTPException(status_code=400, detail="user_id is required")
+
+
+def build_evidence(feature_summary: dict) -> list[dict[str, str | float | int]]:
+    def clamp(value: float, floor: float = 0.0, ceiling: float = 100.0) -> float:
+        return max(floor, min(ceiling, value))
+
+    return [
+        {
+            "key": "posting_volume_ratio",
+            "label": "Posting volume vs baseline",
+            "display": f"{feature_summary['posting_volume_ratio']:.2f}x",
+            "percent": clamp((feature_summary['posting_volume_ratio'] / 2.5) * 100),
+        },
+        {
+            "key": "late_night_ratio",
+            "label": "Late-night posting ratio",
+            "display": f"{round(feature_summary['late_night_ratio'] * 100)}%",
+            "percent": clamp(feature_summary['late_night_ratio'] * 100),
+        },
+        {
+            "key": "average_length_delta",
+            "label": "Writing length shift",
+            "display": f"{feature_summary['average_length_delta']:+.2f}",
+            "percent": clamp(max(feature_summary['average_length_delta'], 0.0) / 1.5 * 100),
+        },
+        {
+            "key": "elevated_language_hits",
+            "label": "Elevated language hits",
+            "display": str(feature_summary['elevated_language_hits']),
+            "percent": clamp(feature_summary['elevated_language_hits'] / 5 * 100),
+        },
+        {
+            "key": "paranoia_language_hits",
+            "label": "Paranoia language hits",
+            "display": str(feature_summary['paranoia_language_hits']),
+            "percent": clamp(feature_summary['paranoia_language_hits'] / 5 * 100),
+        },
+        {
+            "key": "urgency_language_hits",
+            "label": "Urgency language hits",
+            "display": str(feature_summary['urgency_language_hits']),
+            "percent": clamp(feature_summary['urgency_language_hits'] / 5 * 100),
+        },
+        {
+            "key": "punctuation_intensity_delta",
+            "label": "Punctuation intensity shift",
+            "display": f"{feature_summary['punctuation_intensity_delta']:+.4f}",
+            "percent": clamp(max(feature_summary['punctuation_intensity_delta'], 0.0) / 0.03 * 100),
+        },
+        {
+            "key": "coherence_signal",
+            "label": "Coherence pressure",
+            "display": f"{round((1 - feature_summary['coherence_signal']) * 100)}%",
+            "percent": clamp((1 - feature_summary['coherence_signal']) * 100),
+        },
+    ]
+
+
+def build_dashboard_summary(user_id: str) -> dict:
+    entries = list_entries(user_id=user_id, limit=40)
+    subject_name = single_user_display_name() if single_user_enabled() else user_id
+
+    if len(entries) < 3:
+        return {
+            "status": "insufficient_data",
+            "subject_name": subject_name,
+            "headline": "NOT ENOUGH DATA",
+            "summary": "Need at least 3 entries before Driftgauge can score a current state.",
+            "risk_score": None,
+            "level": None,
+            "explanation": "Add more entries or let ingestion pull in more public posts first.",
+            "evidence": [],
+            "source_breakdown": [],
+            "recent_entries": [],
+            "recommendations": [],
+        }
+
+    ordered_entries = sorted(entries, key=lambda item: item.created_at)
+    alert = analyze_entries(ordered_entries, window_size=min(10, len(ordered_entries)))
+    feature_summary = alert.feature_summary.model_dump()
+    source_counts = Counter(entry.source for entry in entries[:20])
+
+    return {
+        "status": "ready",
+        "subject_name": subject_name,
+        "headline": STATE_LABELS[alert.level],
+        "summary": STATE_SUMMARIES[alert.level],
+        "risk_score": alert.risk_score,
+        "level": alert.level,
+        "explanation": alert.explanation,
+        "evidence": build_evidence(feature_summary),
+        "feature_summary": feature_summary,
+        "source_breakdown": [
+            {"label": source, "count": count} for source, count in source_counts.most_common(6)
+        ],
+        "recent_entries": [
+            {
+                "source": entry.source,
+                "created_at": entry.created_at.isoformat(),
+                "preview": entry.text[:180],
+            }
+            for entry in entries[:5]
+        ],
+        "recommendations": alert.recommendations,
+    }
 
 
 def ensure_single_user_defaults() -> None:
@@ -106,6 +226,11 @@ def index(request: Request):
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+@app.get("/dashboard/summary")
+def dashboard_summary(user_id: str | None = None, _: str = Depends(require_auth)):
+    return build_dashboard_summary(resolve_user_id(user_id))
 
 
 @app.post("/auth/register")

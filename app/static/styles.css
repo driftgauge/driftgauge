@@ -27,6 +27,112 @@ h1, h2, h3 {
   margin: 20px 0;
 }
 
+.state-card {
+  background: linear-gradient(180deg, #111827 0%, #0f172a 100%);
+  border-color: #475569;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 12px;
+  color: #93c5fd;
+  margin: 0 0 8px;
+}
+
+.state-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.state-label {
+  font-size: clamp(38px, 8vw, 68px);
+  font-weight: 800;
+  line-height: 0.95;
+  margin: 8px 0 12px;
+}
+
+.state-summary {
+  font-size: 18px;
+  margin: 0 0 10px;
+}
+
+.score-pill {
+  min-width: 140px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #172554;
+  border: 1px solid #3b82f6;
+  text-align: center;
+}
+
+.score-pill span {
+  display: block;
+  font-size: 12px;
+  color: #bfdbfe;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.score-pill strong {
+  display: block;
+  font-size: 42px;
+  margin-top: 4px;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.dashboard-panel {
+  margin-top: 20px;
+  padding: 18px;
+  border-radius: 12px;
+  background: #0b1220;
+  border: 1px solid #334155;
+}
+
+.evidence-gauges,
+.source-breakdown {
+  display: grid;
+  gap: 12px;
+}
+
+.gauge-card,
+.source-bar-row {
+  display: grid;
+  gap: 8px;
+}
+
+.gauge-header,
+.source-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.gauge-track,
+.source-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: #1e293b;
+  overflow: hidden;
+}
+
+.gauge-track span,
+.source-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #38bdf8 0%, #3b82f6 45%, #a855f7 100%);
+}
+
 label {
   display: block;
   margin: 12px 0;
@@ -44,7 +150,7 @@ label {
   margin: 0;
 }
 
-input, textarea, button {
+input, textarea, button, select {
   width: 100%;
   margin-top: 6px;
   border-radius: 10px;
@@ -89,4 +195,14 @@ pre {
 
 .entries li {
   margin: 10px 0;
+}
+
+@media (max-width: 720px) {
+  .state-row {
+    flex-direction: column;
+  }
+
+  .score-pill {
+    width: 100%;
+  }
 }

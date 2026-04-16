@@ -10,4 +10,5 @@ def test_index_page_loads() -> None:
     res = client.get("/")
     assert res.status_code == 200
     assert "Driftgauge" in res.text
-    assert "Add entry" in res.text
+    assert "Current state" in res.text
+    assert "Evidence gauges" in res.text

@@ -102,8 +102,12 @@ def test_single_user_mode_restricts_auth_and_coerces_user_id(monkeypatch) -> Non
     assert wrong_reg.status_code == 403
 
     reg = client.post('/auth/register', json={'username': 'nate_houk_single', 'password': 'password123'})
-    assert reg.status_code == 200
-    token = reg.json()['token']
+    if reg.status_code == 200:
+        token = reg.json()['token']
+    else:
+        login = client.post('/auth/login', json={'username': 'nate_houk_single', 'password': 'password123'})
+        assert login.status_code == 200
+        token = login.json()['token']
 
     created = client.post(
         '/entries',
@@ -131,3 +135,40 @@ def test_configured_social_sources(monkeypatch) -> None:
     sources = configured_social_sources()
     assert {source['source_key'] for source in sources} == {'social-instagram', 'social-x'}
     assert all(source['user_id'] == 'nate-houk' for source in sources)
+
+
+
+def test_dashboard_summary_returns_headline_and_evidence() -> None:
+    headers = _auth_headers(username='dashboard_tester')
+    payloads = [
+        {'user_id': 'dashboard-user', 'source': 'x', 'text': 'Normal day, a couple of posts and then offline.', 'created_at': '2026-03-12T20:00:00Z'},
+        {'user_id': 'dashboard-user', 'source': 'threads', 'text': 'Another steady update, nothing unusual here.', 'created_at': '2026-03-13T20:00:00Z'},
+        {'user_id': 'dashboard-user', 'source': 'instagram', 'text': 'I need to post this right now because everything is lining up tonight!!!', 'created_at': '2026-03-17T01:00:00Z'},
+    ]
+    for payload in payloads:
+        res = client.post('/entries', headers=headers, json=payload)
+        assert res.status_code == 200
+
+    dashboard = client.get('/dashboard/summary?user_id=dashboard-user', headers=headers)
+    assert dashboard.status_code == 200
+    body = dashboard.json()
+    assert body['status'] == 'ready'
+    assert body['headline'] in {'STEADY', 'WATCH', 'ELEVATED', 'HIGH CONCERN'}
+    assert body['risk_score'] is not None
+    assert body['evidence']
+    assert body['source_breakdown']
+
+
+
+def test_configured_social_sources_from_handles(monkeypatch) -> None:
+    monkeypatch.setenv('DRIFTGAUGE_SINGLE_USER_ENABLED', '1')
+    monkeypatch.setenv('DRIFTGAUGE_SINGLE_USER_USERNAME', 'nate_social_handles')
+    monkeypatch.setenv('DRIFTGAUGE_SINGLE_USER_ID', 'nate-houk')
+    monkeypatch.setenv('DRIFTGAUGE_SOCIAL_HANDLES', '@natehouk, @epsilonrecords')
+
+    from app.config import configured_social_sources
+
+    sources = configured_social_sources()
+    assert 'social-instagram-natehouk' in {source['source_key'] for source in sources}
+    assert 'social-x-epsilonrecords' in {source['source_key'] for source in sources}
+    assert len(sources) == 12

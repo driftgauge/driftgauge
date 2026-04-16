@@ -75,22 +75,55 @@ def analysis_interval_minutes() -> int:
     return max(5, int(os.getenv("DRIFTGAUGE_ANALYSIS_INTERVAL_MINUTES", "5")))
 
 
+def social_handles() -> list[str]:
+    raw = _env("DRIFTGAUGE_SOCIAL_HANDLES")
+    if not raw:
+        return []
+
+    handles: list[str] = []
+    seen: set[str] = set()
+    for part in re.split(r"[\s,]+", raw):
+        handle = part.strip().lstrip("@").strip()
+        if not handle:
+            continue
+        lowered = handle.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        handles.append(handle)
+    return handles
+
+
 def configured_social_sources() -> list[dict[str, str | bool]]:
     if not single_user_enabled():
         return []
 
     user_id = single_user_id()
     sources: list[dict[str, str | bool]] = []
-    platform_defs: list[tuple[str, str, tuple[str, ...]]] = [
-        ("instagram", "Instagram", ("DRIFTGAUGE_SOCIAL_INSTAGRAM_URL",)),
-        ("facebook", "Facebook", ("DRIFTGAUGE_SOCIAL_FACEBOOK_URL",)),
-        ("x", "X / Twitter", ("DRIFTGAUGE_SOCIAL_X_URL", "DRIFTGAUGE_SOCIAL_TWITTER_URL")),
-        ("threads", "Threads", ("DRIFTGAUGE_SOCIAL_THREADS_URL",)),
-        ("tiktok", "TikTok", ("DRIFTGAUGE_SOCIAL_TIKTOK_URL",)),
-        ("snapchat", "Snapchat", ("DRIFTGAUGE_SOCIAL_SNAPCHAT_URL",)),
+    platform_defs: list[tuple[str, str, tuple[str, ...], callable]] = [
+        ("instagram", "Instagram", ("DRIFTGAUGE_SOCIAL_INSTAGRAM_URL",), lambda handle: f"https://www.instagram.com/{handle}/"),
+        ("facebook", "Facebook", ("DRIFTGAUGE_SOCIAL_FACEBOOK_URL",), lambda handle: f"https://www.facebook.com/{handle}"),
+        ("x", "X / Twitter", ("DRIFTGAUGE_SOCIAL_X_URL", "DRIFTGAUGE_SOCIAL_TWITTER_URL"), lambda handle: f"https://x.com/{handle}"),
+        ("threads", "Threads", ("DRIFTGAUGE_SOCIAL_THREADS_URL",), lambda handle: f"https://www.threads.net/@{handle}"),
+        ("tiktok", "TikTok", ("DRIFTGAUGE_SOCIAL_TIKTOK_URL",), lambda handle: f"https://www.tiktok.com/@{handle}"),
+        ("snapchat", "Snapchat", ("DRIFTGAUGE_SOCIAL_SNAPCHAT_URL",), lambda handle: f"https://www.snapchat.com/add/{handle}"),
     ]
 
-    for platform_key, default_label, env_names in platform_defs:
+    for handle in social_handles():
+        handle_slug = _slugify(handle)
+        for platform_key, default_label, _, url_builder in platform_defs:
+            sources.append(
+                {
+                    "user_id": user_id,
+                    "source_key": f"social-{platform_key}-{handle_slug}",
+                    "label": f"{default_label} @{handle}",
+                    "url": url_builder(handle),
+                    "kind": platform_key,
+                    "enabled": True,
+                }
+            )
+
+    for platform_key, default_label, env_names, _ in platform_defs:
         url = next((value for value in (_env(env_name) for env_name in env_names) if value), "")
         if not url:
             continue
@@ -109,4 +142,13 @@ def configured_social_sources() -> list[dict[str, str | bool]]:
             }
         )
 
-    return sources
+    deduped: list[dict[str, str | bool]] = []
+    seen_keys: set[str] = set()
+    for source in sources:
+        source_key = str(source["source_key"])
+        if source_key in seen_keys:
+            continue
+        seen_keys.add(source_key)
+        deduped.append(source)
+
+    return deduped
